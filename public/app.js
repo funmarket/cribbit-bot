@@ -1,86 +1,61 @@
-const telegram = window.Telegram?.WebApp;
-telegram?.ready();
-telegram?.expand();
+const telegram = window.Telegram?.WebApp; telegram?.ready(); telegram?.expand();
+const query = new URLSearchParams(location.search); const chatId = query.get('chatId'); const demoMode = query.get('demo') === '1'; const apiBaseUrl = (query.get('apiBaseUrl') || '').replace(/\/$/, ''); const initData = telegram?.initData || '';
+const $ = (selector) => document.querySelector(selector); const $$ = (selector) => [...document.querySelectorAll(selector)];
+const escapeHtml = (value) => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+let data = null; let currentView = query.get('view') || location.hash.slice(1) || 'overview';
 
-const TELEGRAM_BOT_URL = 'https://t.me/Cribbit_bot';
-const params = new URLSearchParams(window.location.search);
-const chatId = params.get('chatId');
-const apiBaseUrl = (params.get('apiBaseUrl') || '').replace(/\/$/, '');
-const status = document.querySelector('#status');
-const statusCopy = document.querySelector('#status-copy');
-const dashboard = document.querySelector('#dashboard');
-const refreshButton = document.querySelector('#refresh-button');
-const money = (amount) => `$${Number(amount).toFixed(2)}`;
-const escapeHtml = (value) => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+const demoData = {
+  viewer:{displayName:'Alex',role:'owner'}, settings:{houseName:'Oak Street',currency:'USD',timezone:'America/New_York',notifications:true,weeklyDigest:true,quietHours:'22:00–08:00'},
+  members:[{id:'m1',displayName:'Alex',username:'@alex',role:'owner',active:true,joinedAt:'2026-07-01'},{id:'m2',displayName:'Maya',username:'@maya',role:'admin',active:true,joinedAt:'2026-07-02'},{id:'m3',displayName:'Noah',username:'@noah',role:'member',active:true,joinedAt:'2026-07-03'}],
+  expenses:[{id:'e1',description:'August rent',paidBy:'Maya',amountCents:126000,amount:1260,category:'Rent',participants:['Alex','Maya','Noah'],createdAt:'2026-08-03T09:00:00Z'},{id:'e2',description:'Groceries',paidBy:'Alex',amountCents:8600,amount:86,category:'Groceries',participants:['Alex','Maya','Noah'],createdAt:'2026-08-04T16:30:00Z'},{id:'e3',description:'Wi-Fi',paidBy:'Noah',amountCents:4800,amount:48,category:'Utilities',participants:['Alex','Maya','Noah'],createdAt:'2026-08-01T12:00:00Z'}],
+  balances:{totalSpentCents:139400,totalSpent:1394,memberCount:3,netCents:{Alex:-39134,Maya:79533,Noah:-40399},settlements:[{from:'Noah',to:'Maya',amountCents:40399,amount:403.99},{from:'Alex',to:'Maya',amountCents:39134,amount:391.34}]},
+  chores:[{id:'c1',task:'Clean the kitchen',assignedTo:'Maya',dueDate:'2026-08-06',priority:'high',done:false,createdAt:'2026-08-04T10:00:00Z'},{id:'c2',task:'Take out recycling',assignedTo:'Alex',dueDate:'2026-08-07',priority:'normal',done:false,createdAt:'2026-08-04T10:20:00Z'},{id:'c3',task:'Water the plants',assignedTo:'Noah',done:true,doneBy:'Noah',createdAt:'2026-08-02T10:00:00Z'}],
+  groceries:[{id:'g1',name:'Oat milk',quantity:'2',category:'Dairy',priority:'urgent',addedBy:'Maya',purchased:false,createdAt:'2026-08-05T08:00:00Z'},{id:'g2',name:'Pasta',quantity:'1',category:'Pantry',priority:'normal',addedBy:'Alex',purchased:false,createdAt:'2026-08-05T09:00:00Z'},{id:'g3',name:'Dish soap',quantity:'1',category:'Household',priority:'normal',addedBy:'Noah',purchased:true,purchasedBy:'Noah',createdAt:'2026-08-03T09:00:00Z'}],
+  activity:[{id:'a1',message:'Maya added Oat milk',actor:'Maya',type:'grocery.added',createdAt:'2026-08-05T08:00:00Z'},{id:'a2',message:'Noah completed “Water the plants”',actor:'Noah',type:'chore.completed',createdAt:'2026-08-04T19:00:00Z'},{id:'a3',message:'Alex added Groceries',actor:'Alex',type:'expense.created',createdAt:'2026-08-04T16:30:00Z'}]
+};
 
-function empty(message) { return `<p class="empty">${escapeHtml(message)}</p>`; }
+function currency(cents){ return new Intl.NumberFormat('en-US',{style:'currency',currency:data?.settings?.currency||'USD',maximumFractionDigits:2}).format((Number(cents)||0)/100); }
+function initials(name){ return String(name||'Member').split(/\s+/).map(part=>part[0]).join('').slice(0,2).toUpperCase(); }
+function dateLabel(value){ if(!value)return 'No due date'; const date=new Date(value); return Number.isNaN(date.getTime())?escapeHtml(value):new Intl.DateTimeFormat('en',{month:'short',day:'numeric'}).format(date); }
+function empty(title,copy){ return `<div class="empty"><strong>${escapeHtml(title)}</strong>${escapeHtml(copy)}</div>`; }
+function expenseIcon(category){ return ({Rent:'⌂',Groceries:'□',Utilities:'⌁',Dining:'◉',Household:'◇'})[category]||'$'; }
+function statusForExpense(expense){ const viewer=data.viewer?.displayName; if(expense.paidBy===viewer)return {label:'Owed to you',className:''}; return {label:'You owe',className:'owe'}; }
 
-function expenseRows(expenses, limit) {
-  const items = [...expenses].reverse().slice(0, limit);
-  return items.length ? items.map((expense) => `<div class="row"><span class="row-icon" aria-hidden="true">$</span><div class="row-main"><p class="row-title">${escapeHtml(expense.description)}</p><p class="row-meta">Paid by ${escapeHtml(expense.paidBy)}</p></div><span class="amount">${money(expense.amount)}</span></div>`).join('') : empty('No expenses yet. Add one in Telegram to get started.');
+function renderExpenses(items, target){ const viewer=data.viewer?.displayName; target.innerHTML=items.length?items.map(expense=>{const status=statusForExpense(expense);const share=Math.round((expense.amountCents??expense.amount*100)/(expense.participants?.length||1));return `<article class="data-row"><span class="row-icon">${expenseIcon(expense.category)}</span><div class="row-main"><strong>${escapeHtml(expense.description)}</strong><small>${expense.paidBy===viewer?'You':escapeHtml(expense.paidBy)} paid · ${dateLabel(expense.createdAt)}</small></div><div class="row-amount"><strong>${currency(expense.amountCents??Math.round(expense.amount*100))}</strong><span class="status ${status.className}">${status.label} ${currency(share)}</span></div></article>`}).join(''):empty('No expenses yet','Add one here, use /split, or tell Cribbit “Paid 45 for groceries.”'); }
+function renderChores(items,target,preview=false){ const shown=preview?items.filter(c=>!c.done).slice(0,3):items; if(preview){target.innerHTML=shown.length?shown.map(chore=>`<article class="data-row"><span class="row-icon">✓</span><div class="row-main"><strong>${escapeHtml(chore.task)}</strong><small>${escapeHtml(chore.assignedTo||'Unassigned')} · ${dateLabel(chore.dueDate)}</small></div><button class="row-action" data-chore-toggle="${chore.id}" data-done="true">Done</button></article>`).join(''):empty('Nothing due','The house is looking suspiciously organized.');return;} target.innerHTML=shown.length?shown.map(chore=>`<article class="chore-card ${chore.done?'done':''}"><span class="priority ${chore.priority==='high'?'high':''}">${escapeHtml(chore.priority||'normal')} priority</span><h3>${escapeHtml(chore.task)}</h3><p>${escapeHtml(chore.assignedTo||'Unassigned')} · ${dateLabel(chore.dueDate)}</p><footer><small>${escapeHtml(chore.id)}</small><button class="row-action" data-chore-toggle="${chore.id}" data-done="${!chore.done}">${chore.done?'Reopen':'Complete'}</button></footer></article>`).join(''):empty('Nothing on the chore board','Add a task here or use /chore add clean kitchen @username.'); }
+function renderGroceries(items,target,preview=false){ const shown=(preview?items.filter(i=>!i.purchased).slice(0,3):items); target.innerHTML=shown.length?shown.map(item=>`<article class="data-row ${item.purchased?'done':''}"><span class="row-icon">${item.purchased?'✓':'□'}</span><div class="row-main"><strong>${escapeHtml(item.name)} × ${escapeHtml(item.quantity||'1')}</strong><small>${escapeHtml(item.category||'Other')} · Added by ${escapeHtml(item.addedBy||'Housemate')}</small></div>${item.priority==='urgent'&&!item.purchased?'<span class="status urgent">Urgent</span>':''}<button class="row-action" data-grocery-toggle="${item.id}" data-purchased="${!item.purchased}">${item.purchased?'Restore':'Bought'}</button></article>`).join(''):empty('The list is suspiciously empty','Add what the house needs before someone finishes the last roll.'); }
+
+function render(){
+  const viewer=data.viewer||data.members[0]||{displayName:'House member',role:'member'}; const settings=data.settings; const viewerKey=Object.keys(data.balances.netCents||{}).find(name=>name.toLowerCase()===viewer.displayName.toLowerCase()); const viewerNet=data.balances.netCents?.[viewerKey]||0;
+  $('#house-name-side').textContent=settings.houseName;$('#house-name-mobile').textContent=settings.houseName;$('#profile-name').textContent=viewer.displayName;$('#profile-role').textContent=viewer.role||'Member';$('#profile-avatar').textContent=initials(viewer.displayName);$('#greeting').textContent=`${new Date().getHours()<12?'Morning':new Date().getHours()<18?'Afternoon':'Evening'}, ${viewer.displayName}.`;$('#current-date').textContent=new Intl.DateTimeFormat('en',{weekday:'long',month:'short',day:'numeric'}).format(new Date()).toUpperCase();
+  $('#owed-total').textContent=currency(Math.max(viewerNet,0));$('#owe-total').textContent=currency(Math.max(-viewerNet,0));const owedPeople=data.balances.settlements.filter(s=>s.to.toLowerCase()===viewer.displayName.toLowerCase()).length;const owePeople=data.balances.settlements.filter(s=>s.from.toLowerCase()===viewer.displayName.toLowerCase()).length;$('#owed-note').textContent=owedPeople?`${owedPeople} ${owedPeople===1?'person owes':'people owe'} you`:'Nothing outstanding';$('#owe-note').textContent=owePeople?`You owe ${owePeople} ${owePeople===1?'person':'people'}`:'Nothing due';
+  const newest=[...data.expenses].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));renderExpenses(newest.slice(0,3),$('#expense-preview'));renderExpenses(filterExpenses(),$('#expense-list'));$('#expense-count').textContent=data.expenses.length;$('#expense-total').textContent=currency(data.balances.totalSpentCents);$('#settlements').innerHTML=data.balances.settlements.length?data.balances.settlements.map(s=>`<div class="settlement-line">${escapeHtml(s.from)} → ${escapeHtml(s.to)} · ${currency(s.amountCents)}</div>`).join(''):'<div class="settlement-line">Everyone is settled.</div>';
+  renderChores(data.chores,$('#chore-preview'),true);renderChores(data.chores,$('#chore-list'));$('#chore-count').textContent=data.chores.length;$('#chore-open-count').textContent=data.chores.filter(c=>!c.done).length;$('#chore-done-count').textContent=data.chores.filter(c=>c.done).length;
+  renderGroceries(data.groceries,$('#grocery-preview'),true);renderGroceries(data.groceries,$('#grocery-list'));$('#grocery-count').textContent=data.groceries.length;$('#grocery-active-count').textContent=data.groceries.filter(i=>!i.purchased).length;$('#grocery-done-count').textContent=data.groceries.filter(i=>i.purchased).length;
+  $('#roomie-grid').innerHTML=data.members.length?data.members.map(member=>{const net=data.balances.netCents?.[Object.keys(data.balances.netCents||{}).find(n=>n.toLowerCase()===member.displayName.toLowerCase())]||0;const assigned=data.chores.filter(c=>!c.done&&String(c.assignedTo||'').replace(/^@/,'').toLowerCase()===String(member.username||member.displayName).replace(/^@/,'').toLowerCase()).length;return `<article class="roomie-card"><div class="roomie-avatar">${initials(member.displayName)}</div><h2>${escapeHtml(member.displayName)}</h2><span>${escapeHtml(member.username||'No username')} · ${escapeHtml(member.role||'member')}</span><div class="roomie-meta"><div><small>BALANCE</small><strong>${currency(net)}</strong></div><div><small>CHORES</small><strong>${assigned} assigned</strong></div></div></article>`}).join(''):empty('No roomies yet','Use Cribbit in your Telegram group to connect housemates.');
+  $('#activity-count').textContent=data.activity.length;$('#activity-list').innerHTML=data.activity.length?data.activity.map(event=>`<article class="timeline-item"><strong>${escapeHtml(event.message)}</strong><small>${dateLabel(event.createdAt)} · ${escapeHtml(event.actor||'Cribbit')}</small></article>`).join(''):empty('No house activity yet','New expenses, chores, and groceries will appear here.');
+  const sf=$('#settings-form');sf.elements.houseName.value=settings.houseName||'';sf.elements.currency.value=settings.currency||'USD';sf.elements.timezone.value=settings.timezone||'';sf.elements.notifications.checked=Boolean(settings.notifications);sf.elements.weeklyDigest.checked=Boolean(settings.weeklyDigest);sf.elements.quietHours.value=settings.quietHours||'';
+  const memberOptions=data.members.filter(m=>m.active!==false).map(m=>`<option value="${escapeHtml(m.displayName)}">${escapeHtml(m.displayName)}</option>`).join('');$('#expense-payer').innerHTML=memberOptions;$('#expense-payer').value=viewer.displayName;$('#chore-assignee').innerHTML=`<option value="">Unassigned</option>${memberOptions}`;bindDynamicActions();showView(currentView,false);
 }
 
-function choreRows(chores, limit) {
-  const items = chores.slice(0, limit);
-  return items.length ? items.map((chore) => `<div class="row ${chore.done ? 'done chore-done' : 'chore-open'}"><span class="row-icon" aria-hidden="true">${chore.done ? '✓' : '○'}</span><div class="row-main"><p class="row-title">${escapeHtml(chore.task)}</p><p class="row-meta">${chore.assignedTo ? `Assigned to ${escapeHtml(chore.assignedTo)}` : 'Unassigned'}${chore.doneBy ? ` · Done by ${escapeHtml(chore.doneBy)}` : ''}</p></div></div>`).join('') : empty('No chores yet. Add one in Telegram to get the house moving.');
-}
+function filterExpenses(){ let items=[...data.expenses];const search=$('#expense-search')?.value.trim().toLowerCase();if(search)items=items.filter(e=>`${e.description} ${e.paidBy} ${e.category}`.toLowerCase().includes(search));const sort=$('#expense-sort')?.value||'newest';items.sort((a,b)=>sort==='amount'?(b.amountCents||0)-(a.amountCents||0):sort==='oldest'?new Date(a.createdAt)-new Date(b.createdAt):new Date(b.createdAt)-new Date(a.createdAt));return items; }
+function showView(view,scroll=true){ const allowed=['overview','expenses','chores','groceries','roomies','activity','settings'];currentView=allowed.includes(view)?view:'overview';$$('[data-panel]').forEach(panel=>panel.hidden=panel.dataset.panel!==currentView);$$('[data-view]').forEach(button=>button.classList.toggle('active',button.dataset.view===currentView));$$('.bottom-nav button').forEach(button=>button.classList.toggle('active',button.dataset.view===currentView));$('#more-menu').hidden=true;history.replaceState(null,'',`${location.pathname}${location.search}#${currentView}`);if(scroll)scrollTo({top:0,behavior:'smooth'}); }
+function toast(message,error=false){ const node=$('#toast');node.textContent=message;node.classList.toggle('error',error);node.hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>node.hidden=true,3200); }
 
-function render(data) {
-  const { expenses, chores, balances } = data;
-  document.querySelector('#total-spent').textContent = money(balances.totalSpent);
-  document.querySelector('#member-count').textContent = balances.memberCount;
-  document.querySelector('#open-chores').textContent = chores.filter((chore) => !chore.done).length;
-  document.querySelector('#expense-count').textContent = expenses.length;
-  document.querySelector('#chore-count').textContent = chores.length;
-  document.querySelector('#settlements').innerHTML = balances.settlements.length ? balances.settlements.map((item) => `<div class="row settlement-row"><span class="row-icon" aria-hidden="true">↗</span><div class="row-main"><p class="row-title">${escapeHtml(item.from)} should pay ${escapeHtml(item.to)}</p><p class="row-meta">Suggested settlement</p></div><span class="amount">${money(item.amount)}</span></div>`).join('') : empty('Everyone is settled. That is a good house vibe.');
-  document.querySelector('#expense-preview').innerHTML = expenseRows(expenses, 3);
-  document.querySelector('#expenses').innerHTML = expenseRows(expenses, 50);
-  document.querySelector('#chore-preview').innerHTML = choreRows(chores, 3);
-  document.querySelector('#chores').innerHTML = choreRows(chores, 50);
-  status.hidden = true;
-  dashboard.hidden = false;
+async function apiAction(action,payload){
+  if(demoMode){ demoAction(action,payload);render();toast('Demo updated. Your real crib stays unchanged.');return; }
+  const response=await fetch(`${apiBaseUrl}/api/action`,{method:'POST',headers:{'Content-Type':'application/json','X-Telegram-Init-Data':initData},body:JSON.stringify({chatId,action,payload})});const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'Cribbit could not save that change.');await loadData();toast('Saved. Telegram and the app are in sync.');
 }
+function demoAction(action,payload){const stamp=new Date().toISOString();const actor=data.viewer.displayName;if(action==='expense.add'){const cents=Math.round(Number(payload.amount)*100);data.expenses.push({id:`demo-e-${Date.now()}`,amountCents:cents,amount:cents/100,description:payload.description,paidBy:payload.paidBy||actor,participants:data.members.map(m=>m.displayName),category:payload.category||'Other',createdAt:stamp});data.balances.totalSpentCents+=cents;}if(action==='chore.add')data.chores.push({id:`demo-c-${Date.now()}`,task:payload.task,assignedTo:payload.assignedTo||null,dueDate:payload.dueDate||null,priority:payload.priority||'normal',done:false,createdAt:stamp});if(action==='chore.toggle'){const item=data.chores.find(i=>i.id===payload.id);if(item)item.done=payload.done;}if(action==='grocery.add')data.groceries.push({id:`demo-g-${Date.now()}`,name:payload.name,quantity:'1',category:'Other',priority:payload.priority||'normal',addedBy:actor,purchased:false,createdAt:stamp});if(action==='grocery.toggle'){const item=data.groceries.find(i=>i.id===payload.id);if(item)item.purchased=payload.purchased;}if(action==='settings.update')Object.assign(data.settings,payload);data.activity.unshift({id:`demo-a-${Date.now()}`,message:`${actor} updated the demo house`,actor,createdAt:stamp}); }
+async function loadData(){ const response=await fetch(`${apiBaseUrl}/api/dashboard?chatId=${encodeURIComponent(chatId)}`,{headers:{'X-Telegram-Init-Data':initData}});const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'Could not open this crib.');data=body;render(); }
+function bindDynamicActions(){ $$('[data-chore-toggle]').forEach(button=>button.onclick=()=>apiAction('chore.toggle',{id:button.dataset.choreToggle,done:button.dataset.done==='true'}).catch(e=>toast(e.message,true)));$$('[data-grocery-toggle]').forEach(button=>button.onclick=()=>apiAction('grocery.toggle',{id:button.dataset.groceryToggle,purchased:button.dataset.purchased==='true'}).catch(e=>toast(e.message,true))); }
 
-function showStatus(message, isError = false) {
-  statusCopy.textContent = message;
-  status.classList.toggle('error', isError);
-  status.hidden = false;
-}
+$$('[data-view]').forEach(button=>button.addEventListener('click',()=>{showView(button.dataset.view);const focus=button.dataset.focus;if(focus)setTimeout(()=>document.getElementById(focus)?.focus(),80)}));$('#more-button').addEventListener('click',()=>$('#more-menu').hidden=!$('#more-menu').hidden);$('#mobile-more').addEventListener('click',()=>$('#more-menu').hidden=!$('#more-menu').hidden);
+$$('[data-modal]').forEach(button=>button.addEventListener('click',()=>document.getElementById(button.dataset.modal).showModal()));$$('[data-close]').forEach(button=>button.addEventListener('click',()=>button.closest('dialog').close()));
+$('#expense-search').addEventListener('input',()=>data&&renderExpenses(filterExpenses(),$('#expense-list')));$('#expense-sort').addEventListener('change',()=>data&&renderExpenses(filterExpenses(),$('#expense-list')));
+$('#expense-form').addEventListener('submit',async event=>{event.preventDefault();const form=new FormData(event.currentTarget);try{await apiAction('expense.add',Object.fromEntries(form));event.currentTarget.reset();$('#expense-modal').close();}catch(error){toast(error.message,true)}});
+$('#chore-form').addEventListener('submit',async event=>{event.preventDefault();const form=new FormData(event.currentTarget);try{await apiAction('chore.add',Object.fromEntries(form));event.currentTarget.reset();$('#chore-modal').close();}catch(error){toast(error.message,true)}});
+$('#grocery-form').addEventListener('submit',async event=>{event.preventDefault();const form=new FormData(event.currentTarget);try{await apiAction('grocery.add',Object.fromEntries(form));event.currentTarget.reset();}catch(error){toast(error.message,true)}});
+$('#settings-form').addEventListener('submit',async event=>{event.preventDefault();const form=new FormData(event.currentTarget);const payload=Object.fromEntries(form);payload.notifications=event.currentTarget.elements.notifications.checked;payload.weeklyDigest=event.currentTarget.elements.weeklyDigest.checked;try{await apiAction('settings.update',payload)}catch(error){toast(error.message,true)}});
 
-async function loadDashboard() {
-  if (!chatId) {
-    showStatus('Open this dashboard from /dashboard in your Cribbit Telegram group.');
-    dashboard.hidden = true;
-    return;
-  }
-  refreshButton.disabled = true;
-  showStatus('Refreshing your household…');
-  try {
-    const response = await fetch(`${apiBaseUrl}/api/dashboard?chatId=${encodeURIComponent(chatId)}`, { headers: telegram?.initData ? { 'X-Telegram-Init-Data': telegram.initData } : {} });
-    if (!response.ok) throw new Error(`Dashboard request failed with ${response.status}`);
-    render(await response.json());
-  } catch (error) {
-    console.error('Could not load dashboard:', error);
-    showStatus('Could not load this household. Return to Telegram and try /dashboard again.', true);
-  } finally { refreshButton.disabled = false; }
-}
-
-function showView(view, scroll = true) {
-  const nextView = ['overview', 'expenses', 'chores'].includes(view) ? view : 'overview';
-  document.querySelectorAll('[data-panel]').forEach((panel) => { panel.hidden = panel.dataset.panel !== nextView; });
-  document.querySelectorAll('.nav-button').forEach((button) => {
-    const active = button.dataset.view === nextView;
-    button.classList.toggle('active', active);
-    button.setAttribute('aria-pressed', String(active));
-  });
-  document.querySelector('#overview-intro').hidden = nextView !== 'overview';
-  window.location.hash = nextView;
-  if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-document.querySelectorAll('[data-view]').forEach((control) => control.addEventListener('click', () => showView(control.dataset.view)));
-document.querySelectorAll('[data-view-link]').forEach((control) => control.addEventListener('click', (event) => { event.preventDefault(); showView(control.dataset.viewLink); }));
-document.querySelectorAll('.telegram-link').forEach((link) => { link.href = TELEGRAM_BOT_URL; });
-refreshButton.addEventListener('click', loadDashboard);
-showView(window.location.hash.slice(1), false);
-loadDashboard();
+(async()=>{ try{if(demoMode){data=structuredClone(demoData);$('#demo-banner').hidden=false;render();$('#loading').hidden=true;$('#app').hidden=false;return;}if(!chatId||!initData){$('#loading').hidden=true;$('#auth-gate').hidden=false;return;}await loadData();$('#loading').hidden=true;$('#app').hidden=false;}catch(error){$('#loading').hidden=true;$('#auth-gate').hidden=false;$('.auth-card>p:not(.kicker)').textContent=error.message;}})();

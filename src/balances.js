@@ -1,82 +1,23 @@
 const { uniqueNames } = require('./expenses');
-
-function simplifyDebts(netBalances) {
-  const debtors = [];
-  const creditors = [];
-
-  for (const [name, amount] of Object.entries(netBalances)) {
-    const cents = Math.round(amount * 100);
-    if (cents < 0) debtors.push({ name, cents: -cents });
-    if (cents > 0) creditors.push({ name, cents });
-  }
-
-  debtors.sort((a, b) => b.cents - a.cents);
-  creditors.sort((a, b) => b.cents - a.cents);
-
-  const settlements = [];
-  let debtorIndex = 0;
-  let creditorIndex = 0;
-
-  while (debtorIndex < debtors.length && creditorIndex < creditors.length) {
-    const debtor = debtors[debtorIndex];
-    const creditor = creditors[creditorIndex];
-    const cents = Math.min(debtor.cents, creditor.cents);
-
-    if (cents > 0) {
-      settlements.push({ from: debtor.name, to: creditor.name, amount: cents / 100 });
-    }
-
-    debtor.cents -= cents;
-    creditor.cents -= cents;
-    if (debtor.cents === 0) debtorIndex += 1;
-    if (creditor.cents === 0) creditorIndex += 1;
-  }
-
+function simplifyDebts(netBalances, valuesAreCents = false) {
+  const debtors = [], creditors = [];
+  for (const [name, value] of Object.entries(netBalances)) { const cents = valuesAreCents ? Math.round(value) : Math.round(value * 100); if (cents < 0) debtors.push({ name, cents: -cents }); if (cents > 0) creditors.push({ name, cents }); }
+  debtors.sort((a, b) => b.cents - a.cents); creditors.sort((a, b) => b.cents - a.cents);
+  const settlements = []; let d = 0, c = 0;
+  while (d < debtors.length && c < creditors.length) { const cents = Math.min(debtors[d].cents, creditors[c].cents); if (cents > 0) settlements.push({ from: debtors[d].name, to: creditors[c].name, amountCents: cents, amount: cents / 100 }); debtors[d].cents -= cents; creditors[c].cents -= cents; if (!debtors[d].cents) d++; if (!creditors[c].cents) c++; }
   return settlements;
 }
-
 function calculateBalances(expenses, knownMembers = []) {
-  const fallbackMembers = uniqueNames([
-    ...knownMembers,
-    ...expenses.map((expense) => expense.paidBy)
-  ]);
-  const paid = {};
-  const net = {};
-  let totalSpent = 0;
-
+  const fallback = uniqueNames([...knownMembers, ...expenses.map((e) => e.paidBy)]); const paidCents = {}, netCents = {}; let totalSpentCents = 0;
   for (const expense of expenses) {
-    const amount = Number(expense.amount);
-    if (!Number.isFinite(amount) || amount <= 0 || !expense.paidBy) continue;
-
-    const participants = uniqueNames(
-      Array.isArray(expense.participants) && expense.participants.length
-        ? expense.participants
-        : fallbackMembers
-    );
-    if (!participants.some((name) => name.toLocaleLowerCase() === expense.paidBy.toLocaleLowerCase())) {
-      participants.push(expense.paidBy);
-    }
-    const payerName = participants.find(
-      (name) => name.toLocaleLowerCase() === expense.paidBy.toLocaleLowerCase()
-    ) || expense.paidBy;
-
-    totalSpent += amount;
-    paid[payerName] = (paid[payerName] || 0) + amount;
-    const share = amount / participants.length;
-
-    for (const person of participants) {
-      net[person] = (net[person] || 0) - share;
-    }
-    net[payerName] = (net[payerName] || 0) + amount;
+    const cents = Number.isInteger(expense.amountCents) ? expense.amountCents : Math.round(Number(expense.amount) * 100); if (!Number.isInteger(cents) || cents <= 0 || !expense.paidBy || expense.deletedAt) continue;
+    const participants = uniqueNames(expense.participants?.length ? expense.participants : fallback).filter((name) => !(expense.excluded || []).some((excluded) => excluded.toLowerCase() === name.toLowerCase()));
+    if (!participants.some((n) => n.toLowerCase() === expense.paidBy.toLowerCase())) participants.push(expense.paidBy);
+    const payer = participants.find((n) => n.toLowerCase() === expense.paidBy.toLowerCase()) || expense.paidBy; totalSpentCents += cents; paidCents[payer] = (paidCents[payer] || 0) + cents;
+    const base = Math.floor(cents / participants.length), remainder = cents % participants.length;
+    participants.forEach((person, index) => { netCents[person] = (netCents[person] || 0) - base - (index < remainder ? 1 : 0); }); netCents[payer] += cents;
   }
-
-  return {
-    totalSpent,
-    memberCount: Object.keys(net).length,
-    paid,
-    net,
-    settlements: simplifyDebts(net)
-  };
+  const settlements = simplifyDebts(netCents, true); const toDollars = (object) => Object.fromEntries(Object.entries(object).map(([k, v]) => [k, v / 100]));
+  return { totalSpentCents, totalSpent: totalSpentCents / 100, memberCount: Object.keys(netCents).length, paidCents, paid: toDollars(paidCents), netCents, net: toDollars(netCents), settlements };
 }
-
 module.exports = { calculateBalances, simplifyDebts };

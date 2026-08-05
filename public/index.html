@@ -1,60 +1,49 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#101b24" />
-  <meta name="description" content="Cribbit keeps your shared expenses, balances, and chores together." />
-  <title>Cribbit · Your shared home</title>
-  <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/styles.css" />
-  <script src="/app.js" defer></script>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#171510">
+  <meta name="description" content="Cribbit shared-house dashboard"><title>Cribbit · Your crib</title>
+  <script src="https://telegram.org/js/telegram-web-app.js?63"></script><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css"><script src="/app.js" defer></script>
 </head>
 <body>
-<div class="app-shell">
-  <header class="topbar">
-    <a class="brand" href="#overview" data-view-link="overview" aria-label="Cribbit overview"><span class="brand-mark" aria-hidden="true">C</span><span>Cribbit</span></a>
-    <a class="telegram-link compact-link" href="https://t.me/Cribbit_bot" target="_blank" rel="noreferrer">Open Telegram <span aria-hidden="true">↗</span></a>
-  </header>
-  <nav class="view-nav" aria-label="Dashboard views">
-    <button class="nav-button active" type="button" data-view="overview" aria-pressed="true">Overview</button>
-    <button class="nav-button" type="button" data-view="expenses" aria-pressed="false">Expenses</button>
-    <button class="nav-button" type="button" data-view="chores" aria-pressed="false">Chores</button>
-  </nav>
-  <main>
-    <section class="intro" id="overview-intro">
-      <div><p class="eyebrow">YOUR SHARED HOME, UPGRADED</p><h1>Know the house <em>vibe.</em></h1><p class="intro-copy">Bills, balances, and chores—updated from Telegram and clear at a glance.</p></div>
-      <button id="refresh-button" class="refresh-button" type="button" aria-label="Refresh household data"><span aria-hidden="true">↻</span> Refresh</button>
-    </section>
-    <div id="status" class="status" role="status" aria-live="polite"><span class="status-dot" aria-hidden="true"></span><span id="status-copy">Loading your household…</span></div>
-    <section id="dashboard" hidden>
-      <section class="view-panel" data-panel="overview">
-        <div class="summary-grid">
-          <article class="summary-card lime-card"><span>TOTAL SPENT</span><strong id="total-spent">$0.00</strong><small>Across this household</small></article>
-          <article class="summary-card cream-card"><span>HOUSEMATES</span><strong id="member-count">0</strong><small>Included in balances</small></article>
-          <article class="summary-card dark-card"><span>OPEN CHORES</span><strong id="open-chores">0</strong><small>Still to get done</small></article>
-        </div>
-        <section class="content-card"><div class="section-heading"><div><span>SETTLE UP</span><h2>Who pays whom</h2></div><a class="text-link telegram-link" href="https://t.me/Cribbit_bot" target="_blank" rel="noreferrer">Open bot ↗</a></div><div id="settlements" class="stack"></div></section>
-        <div class="overview-columns">
-          <section class="content-card"><div class="section-heading"><div><span>RECENT</span><h2>Expenses</h2></div><button class="text-button" type="button" data-view="expenses">View all →</button></div><div id="expense-preview" class="stack"></div></section>
-          <section class="content-card"><div class="section-heading"><div><span>HOUSE</span><h2>Chores</h2></div><button class="text-button" type="button" data-view="chores">View all →</button></div><div id="chore-preview" class="stack"></div></section>
-        </div>
+<div id="loading" class="loading-screen" aria-live="polite"><img src="/logo.png" alt="Cribbit"><div><span></span><span></span><span></span></div><p>Opening your crib…</p></div>
+<section id="auth-gate" class="auth-gate" hidden>
+  <div class="auth-card"><img src="/logo.png" alt="Cribbit"><p class="kicker">TELEGRAM MINI APP</p><h1>Open Cribbit with your house.</h1><p>Your household data stays connected to the Telegram group where you use Cribbit.</p><a href="https://t.me/Cribbit_bot" class="primary-button">Open @Cribbit_bot</a><a href="?demo=1" class="secondary-button">Explore demo dashboard</a></div>
+</section>
+<div id="app" class="app-frame" hidden>
+  <aside class="sidebar">
+    <img class="app-logo" src="/logo.png" alt="Cribbit">
+    <div class="house-card"><span class="house-icon">⌂</span><div><small>YOUR CRIB</small><strong id="house-name-side">My Crib</strong></div><span>⌄</span></div>
+    <nav class="side-nav" aria-label="Main navigation">
+      <button data-view="overview" class="active"><span>⌂</span>Overview</button><button data-view="expenses"><span>↗</span>Expenses</button><button data-view="chores"><span>✓</span>Chores</button><button data-view="groceries"><span>□</span>Groceries</button><button data-view="roomies"><span>♙</span>Roomies</button><button data-view="activity"><span>◷</span>Activity</button>
+    </nav>
+    <button class="settings-link" data-view="settings"><span>⚙</span>Settings</button>
+    <div class="profile"><span id="profile-avatar">ME</span><div><strong id="profile-name">House member</strong><small id="profile-role">Member</small></div></div>
+  </aside>
+  <div class="app-main">
+    <header class="mobile-header"><img src="/logo.png" alt="Cribbit"><div><small>YOUR CRIB</small><strong id="house-name-mobile">My Crib</strong></div><button id="mobile-more" aria-label="Open more navigation">•••</button></header>
+    <div id="demo-banner" class="demo-banner" hidden><span>Demo mode · sample household</span><a href="https://t.me/Cribbit_bot">Open your real crib ↗</a></div>
+    <main>
+      <section class="view" data-panel="overview">
+        <div class="page-header"><div><p class="kicker" id="current-date">TODAY</p><h1 id="greeting">Morning.</h1></div><div class="header-actions"><button class="icon-button" aria-label="Notifications">◇<i></i></button><button class="quick-add" data-modal="expense-modal">＋ Add</button></div></div>
+        <div class="balance-grid"><article class="balance-card owed-card"><small>YOU’RE OWED</small><strong id="owed-total">$0.00</strong><span id="owed-note">Nothing outstanding</span></article><article class="balance-card owe-card"><small>YOU OWE</small><strong id="owe-total">$0.00</strong><span id="owe-note">Nothing due</span></article></div>
+        <div class="quick-actions"><button data-modal="expense-modal"><b>＋</b><span>Add expense</span></button><button data-modal="chore-modal"><b>✓</b><span>Add chore</span></button><button data-view="groceries" data-focus="grocery-input"><b>□</b><span>Add grocery</span></button><button data-view="expenses"><b>↔</b><span>Settle up</span></button></div>
+        <section class="card"><div class="card-head"><h2>Recent expenses</h2><button data-view="expenses">View all →</button></div><div id="expense-preview" class="rows"></div></section>
+        <div class="overview-split"><section class="card"><div class="card-head"><h2>Chores due</h2><button data-view="chores">Open board →</button></div><div id="chore-preview" class="rows"></div></section><section class="card"><div class="card-head"><h2>Grocery list</h2><button data-view="groceries">Open list →</button></div><div id="grocery-preview" class="rows"></div></section></div>
       </section>
-      <section class="view-panel" data-panel="expenses" hidden>
-        <div class="page-heading"><div><p class="eyebrow">THE MONEY</p><h2>Every expense,<br><em>one clear history.</em></h2></div><a class="action-link telegram-link" href="https://t.me/Cribbit_bot" target="_blank" rel="noreferrer">+ Add in Telegram</a></div>
-        <section class="content-card"><div class="section-heading"><div><span>ALL ACTIVITY</span><h2>Expenses</h2></div><span id="expense-count" class="count-pill">0</span></div><div id="expenses" class="stack"></div></section>
-      </section>
-      <section class="view-panel" data-panel="chores" hidden>
-        <div class="page-heading"><div><p class="eyebrow">THE HOUSE</p><h2>Chores, without<br><em>the chasing.</em></h2></div><a class="action-link telegram-link" href="https://t.me/Cribbit_bot" target="_blank" rel="noreferrer">+ Add in Telegram</a></div>
-        <section class="content-card"><div class="section-heading"><div><span>TO-DO LIST</span><h2>House chores</h2></div><span id="chore-count" class="count-pill">0</span></div><div id="chores" class="stack"></div></section>
-      </section>
-    </section>
-    <section class="telegram-cta"><div><p class="eyebrow">ROOMMATES · STUDENT HOUSES · CO-LIVING</p><h2>Put the group chat<br>to better use.</h2></div><a class="cta-button telegram-link" href="https://t.me/Cribbit_bot" target="_blank" rel="noreferrer">Chat with Cribbit <span aria-hidden="true">↗</span></a></section>
-  </main>
-  <footer><a class="brand footer-brand" href="#overview" data-view-link="overview"><span class="brand-mark" aria-hidden="true">C</span><span>Cribbit</span></a><p>Shared living, minus the spreadsheet drama.</p><a href="https://t.me/Cribbit_bot" target="_blank" rel="noreferrer">@Cribbit_bot ↗</a></footer>
+      <section class="view" data-panel="expenses" hidden><div class="page-header"><div><p class="kicker">MONEY, MADE CLEAR</p><h1>Expenses</h1><p>Every shared cost and the fairest way home.</p></div><button class="quick-add" data-modal="expense-modal">＋ Add expense</button></div><div class="filter-bar"><input id="expense-search" type="search" placeholder="Search expenses" aria-label="Search expenses"><select id="expense-sort" aria-label="Sort expenses"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="amount">Highest amount</option></select></div><div class="balance-summary card"><div><small>TOTAL HOUSE SPEND</small><strong id="expense-total">$0.00</strong></div><div id="settlements"></div></div><section class="card"><div class="card-head"><h2>Expense history</h2><span id="expense-count" class="count">0</span></div><div id="expense-list" class="rows"></div></section></section>
+      <section class="view" data-panel="chores" hidden><div class="page-header"><div><p class="kicker">HOUSE RHYTHM</p><h1>Chores</h1><p>Clear owners, clear due dates, zero chasing.</p></div><button class="quick-add" data-modal="chore-modal">＋ Add chore</button></div><div class="metric-grid"><article><small>TO DO</small><strong id="chore-open-count">0</strong></article><article><small>COMPLETED</small><strong id="chore-done-count">0</strong></article></div><section class="card"><div class="card-head"><h2>Chore board</h2><span id="chore-count" class="count">0</span></div><div id="chore-list" class="board"></div></section></section>
+      <section class="view" data-panel="groceries" hidden><div class="page-header"><div><p class="kicker">SHARED SHOPPING</p><h1>Groceries</h1><p>One list, fewer “did anyone buy milk?” messages.</p></div></div><form id="grocery-form" class="inline-form"><label class="sr-only" for="grocery-input">Grocery item</label><input id="grocery-input" name="name" placeholder="Add what the house needs…" required maxlength="120"><select name="priority" aria-label="Priority"><option value="normal">Normal</option><option value="urgent">Urgent</option></select><button type="submit">Add item</button></form><div class="metric-grid"><article><small>ACTIVE ITEMS</small><strong id="grocery-active-count">0</strong></article><article><small>PURCHASED</small><strong id="grocery-done-count">0</strong></article></div><section class="card"><div class="card-head"><h2>Shopping list</h2><span id="grocery-count" class="count">0</span></div><div id="grocery-list" class="rows"></div></section></section>
+      <section class="view" data-panel="roomies" hidden><div class="page-header"><div><p class="kicker">THE HOUSE</p><h1>Roomies</h1><p>Everyone connected to this crib and what they have going on.</p></div><a class="quick-add link-button" href="https://t.me/Cribbit_bot">Invite in Telegram ↗</a></div><div id="roomie-grid" class="roomie-grid"></div></section>
+      <section class="view" data-panel="activity" hidden><div class="page-header"><div><p class="kicker">ONE SHARED PULSE</p><h1>Activity</h1><p>A calm, chronological record of what changed.</p></div></div><section class="card"><div class="card-head"><h2>House activity</h2><span id="activity-count" class="count">0</span></div><div id="activity-list" class="timeline"></div></section></section>
+      <section class="view" data-panel="settings" hidden><div class="page-header"><div><p class="kicker">MAKE IT YOURS</p><h1>Settings</h1><p>House defaults and the notifications that keep everyone aligned.</p></div></div><form id="settings-form" class="settings-grid"><section class="card"><h2>House</h2><label>House name<input name="houseName" maxlength="80"></label><label>Default currency<select name="currency"><option>USD</option><option>GBP</option><option>EUR</option><option>NGN</option><option>CAD</option><option>AUD</option></select></label><label>Time zone<input name="timezone" placeholder="Africa/Lagos"></label></section><section class="card"><h2>Notifications</h2><label class="toggle-row"><span><b>Telegram notifications</b><small>Post neutral house updates</small></span><input type="checkbox" name="notifications"></label><label class="toggle-row"><span><b>Weekly CribCheck</b><small>Weekly household summary</small></span><input type="checkbox" name="weeklyDigest"></label><label>Quiet hours<input name="quietHours" placeholder="22:00–08:00"></label></section><button class="primary-button save-settings" type="submit">Save settings</button></form></section>
+    </main>
+  </div>
+  <nav class="bottom-nav" aria-label="Mobile navigation"><button data-view="overview" class="active"><span>⌂</span>Home</button><button data-view="expenses"><span>↗</span>Expenses</button><button data-view="chores"><span>✓</span>Chores</button><button data-view="groceries"><span>□</span>Groceries</button><button id="more-button"><span>•••</span>More</button></nav>
 </div>
-</body>
-</html>
+<div id="more-menu" class="more-menu" hidden><button data-view="roomies">♙ Roomies</button><button data-view="activity">◷ Activity</button><button data-view="settings">⚙ Settings</button></div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<dialog id="expense-modal"><form id="expense-form" method="dialog"><div class="modal-head"><div><p class="kicker">NEW EXPENSE</p><h2>Add a shared cost</h2></div><button type="button" data-close aria-label="Close">×</button></div><label>Description<input name="description" required maxlength="160" placeholder="Pizza, Wi-Fi, cleaning supplies…"></label><div class="form-row"><label>Amount<input name="amount" required type="number" min="0.01" step="0.01" placeholder="0.00"></label><label>Category<select name="category"><option>Other</option><option>Groceries</option><option>Rent</option><option>Utilities</option><option>Dining</option><option>Household</option></select></label></div><label>Paid by<select name="paidBy" id="expense-payer"></select></label><label>Notes<textarea name="notes" maxlength="500" placeholder="Optional note"></textarea></label><div class="modal-actions"><button type="button" class="secondary-button" data-close>Cancel</button><button type="submit" class="primary-button">Add expense</button></div></form></dialog>
+<dialog id="chore-modal"><form id="chore-form" method="dialog"><div class="modal-head"><div><p class="kicker">NEW CHORE</p><h2>Add a house task</h2></div><button type="button" data-close aria-label="Close">×</button></div><label>Chore title<input name="task" required maxlength="160" placeholder="Clean the kitchen"></label><label>Assign to<select name="assignedTo" id="chore-assignee"><option value="">Unassigned</option></select></label><div class="form-row"><label>Due date<input name="dueDate" type="date"></label><label>Priority<select name="priority"><option value="normal">Normal</option><option value="high">High</option></select></label></div><div class="modal-actions"><button type="button" class="secondary-button" data-close>Cancel</button><button type="submit" class="primary-button">Add chore</button></div></form></dialog>
+</body></html>
