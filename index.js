@@ -16,8 +16,8 @@ fs.mkdirSync(DATA_DIR, { recursive: true }); const store = createStore(DATA_FILE
 
 const actorName = (ctx) => cleanName(ctx.from?.first_name || ctx.from?.username || String(ctx.from?.id || 'Unknown'));
 const money = (cents, currency = 'USD') => new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(cents / 100);
-const dashboardBaseUrl = () => process.env.MINI_APP_URL?.replace(/\/$/, '') || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null);
-function dashboardUrl(chatId, view) { const base = dashboardBaseUrl(); if (!base) return null; const params = new URLSearchParams({ chatId: String(chatId) }); if (view) params.set('view', view); if (process.env.MINI_APP_URL && process.env.RAILWAY_PUBLIC_DOMAIN) params.set('apiBaseUrl', `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`); return `${base}/?${params}`; }
+const dashboardBaseUrl = () => process.env.MINI_APP_URL ? `${process.env.MINI_APP_URL.replace(/\/$/, '')}/app` : (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/app` : null);
+function dashboardUrl(chatId, view) { const base = dashboardBaseUrl(); if (!base) return null; const params = new URLSearchParams({ chatId: String(chatId) }); if (view) params.set('view', view); if (process.env.MINI_APP_URL && process.env.RAILWAY_PUBLIC_DOMAIN) params.set('apiBaseUrl', `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`); return `${base}?${params}`; }
 const dashboardKeyboard = (chatId, view) => { const url = dashboardUrl(chatId, view); return url ? { inline_keyboard: [[{ text: 'Open Cribbit', web_app: { url } }]] } : undefined; };
 
 bot.use(async (ctx, next) => {
