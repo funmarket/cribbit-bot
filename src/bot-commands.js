@@ -1,8 +1,9 @@
-const BOT_COMMANDS = [
-  { command: 'start', description: 'Open Cribbit and see examples' }, { command: 'split', description: 'Split an expense' }, { command: 'balance', description: 'Show balances and settlements' },
-  { command: 'chore', description: 'Add, complete, or reassign a chore' }, { command: 'chores', description: 'List household chores' }, { command: 'done', description: 'Mark a chore as completed' },
-  { command: 'grocery', description: 'Add or update a grocery item' }, { command: 'groceries', description: 'Show the shared grocery list' }, { command: 'roomies', description: 'Show active house members' },
-  { command: 'activity', description: 'Show recent house activity' }, { command: 'settings', description: 'View or update house settings' }, { command: 'dashboard', description: 'Open the household dashboard' },
-  { command: 'help', description: 'Show commands and examples' }, { command: 'clear', description: 'Clear this group\'s saved data' }
-];
-module.exports = { BOT_COMMANDS };
+const DESCRIPTIONS = {
+  en: { start: 'Open Cribbit and see examples', split: 'Split an expense', balance: 'View your balance', chore: 'Add or manage a chore', chores: 'View all chores', done: 'Mark a chore completed', grocery: 'Add or update groceries', groceries: 'View the grocery list', roomies: 'View house members', activity: 'View recent activity', settings: 'View house settings', dashboard: 'Open Cribbit', help: 'View available commands', language: 'Change language' },
+  fr: { start: 'Ouvrir Cribbit et voir des exemples', split: 'Partager une dépense', balance: 'Voir votre solde', chore: 'Ajouter ou gérer une tâche', chores: 'Voir toutes les tâches', done: 'Marquer une tâche terminée', grocery: 'Ajouter ou modifier les courses', groceries: 'Voir la liste de courses', roomies: 'Voir les colocataires', activity: 'Voir l’activité récente', settings: 'Voir les paramètres du logement', dashboard: 'Ouvrir Cribbit', help: 'Voir les commandes disponibles', language: 'Changer la langue' },
+  ar: { start: 'فتح Cribbit وعرض أمثلة', split: 'تقسيم مصروف', balance: 'عرض رصيدك', chore: 'إضافة أو إدارة مهمة منزلية', chores: 'عرض جميع المهام', done: 'تحديد مهمة كمكتملة', grocery: 'إضافة أو تحديث البقالة', groceries: 'عرض قائمة البقالة', roomies: 'عرض سكان المنزل', activity: 'عرض النشاط الأخير', settings: 'عرض إعدادات المنزل', dashboard: 'فتح Cribbit', help: 'عرض الأوامر المتاحة', language: 'تغيير اللغة' }
+};
+const ORDER = ['start', 'split', 'balance', 'chore', 'chores', 'done', 'grocery', 'groceries', 'roomies', 'activity', 'settings', 'dashboard', 'help', 'language'];
+const commandsForLocale = (locale = 'en') => ORDER.map((command) => ({ command, description: (DESCRIPTIONS[locale] || DESCRIPTIONS.en)[command] }));
+const BOT_COMMANDS = commandsForLocale('en');
+module.exports = { BOT_COMMANDS, commandsForLocale };

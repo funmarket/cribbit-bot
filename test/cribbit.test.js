@@ -4,13 +4,14 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { parseNaturalExpense } = require('../src/expenses');
+const { parseNaturalExpense, normalizeDigits, parseLocalizedAmount } = require('../src/expenses');
 const { calculateBalances, simplifyDebts } = require('../src/balances');
 const { parseChoreInput } = require('../src/chores');
 const { createStore } = require('../src/store');
 const { validateTelegramInitData } = require('../src/telegram-auth');
 const { startDashboardServer } = require('../src/dashboard-server');
-const { BOT_COMMANDS } = require('../src/bot-commands');
+const { BOT_COMMANDS, commandsForLocale } = require('../src/bot-commands');
+const { normalizeLocale, translate, missingTranslationKeys } = require('../src/i18n');
 
 test('parses natural-language expenses including participant rules', () => {
   assert.deepEqual(parseNaturalExpense('Paid 45 for groceries', 'Alex'), { amount: 45, description: 'groceries', paidBy: 'Alex' });
@@ -67,5 +68,56 @@ test('serves authenticated dashboard data and persistent actions', async (t) => 
 });
 
 test('Telegram command menu includes persistent product areas', () => {
-  const commands = BOT_COMMANDS.map(({ command }) => command); for (const command of ['grocery', 'groceries', 'roomies', 'activity', 'settings', 'dashboard']) assert.ok(commands.includes(command)); assert.ok(BOT_COMMANDS.every(({ description }) => description.length > 0 && description.length <= 256));
+  const commands = BOT_COMMANDS.map(({ command }) => command); for (const command of ['split', 'balance', 'chore', 'chores', 'dashboard', 'help', 'language']) assert.ok(commands.includes(command)); assert.ok(BOT_COMMANDS.every(({ description }) => description.length > 0 && description.length <= 256));
+});
+
+test('normalizes supported Telegram locale variants and falls back to English', () => {
+  assert.equal(normalizeLocale('en-GB'), 'en'); assert.equal(normalizeLocale('fr-CA'), 'fr'); assert.equal(normalizeLocale('ar-TN'), 'ar'); assert.equal(normalizeLocale('de-DE'), 'en');
+});
+
+test('translation fallback and resource completeness', () => {
+  assert.equal(translate('fr', 'settings.languageUpdated'), 'Langue changée en français.'); assert.equal(translate('ar', 'settings.languageUpdated'), 'تم تغيير اللغة إلى العربية.'); assert.equal(translate('fr', 'not.present'), 'not.present');
+  assert.deepEqual(missingTranslationKeys(), { fr: [], ar: [] });
+});
+
+test('saved preference overrides Telegram language and house controls group responses', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-locale-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true })); const store = createStore(path.join(directory, 'data.json'));
+  store.registerMember('house', { id: 7, first_name: 'Maya', language_code: 'fr-CA' }, 'Oak'); store.updateSettings('house', { defaultLocale: 'ar' }, 'Maya');
+  assert.equal(store.resolveLocale('house', { id: 7, language_code: 'fr-CA' }), 'fr'); assert.equal(store.resolveLocale('house', { id: 7, language_code: 'fr-CA' }, { groupMessage: true }), 'ar');
+  store.setUserLocale(7, 'en-GB'); assert.equal(store.resolveLocale('house', { id: 7, language_code: 'fr' }), 'en'); assert.equal(createStore(path.join(directory, 'data.json')).userLocale(7), 'en');
+});
+
+test('house language changes require an owner or admin role in command policy', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-admin-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true })); const store = createStore(path.join(directory, 'data.json'));
+  const owner = store.registerMember('house', { id: 1, first_name: 'Owner' }, 'Oak'); const member = store.registerMember('house', { id: 2, first_name: 'Member' }, 'Oak');
+  assert.ok(['owner', 'admin'].includes(owner.role)); assert.equal(['owner', 'admin'].includes(member.role), false);
+});
+
+test('localized help, empty expenses, and empty chores are available', () => {
+  for (const locale of ['en', 'fr', 'ar']) { assert.notEqual(translate(locale, 'bot.help'), 'bot.help'); assert.notEqual(translate(locale, 'expenses.noLogged'), 'expenses.noLogged'); assert.notEqual(translate(locale, 'chores.empty'), 'chores.empty'); }
+});
+
+test('parses French expenses and decimal commas', () => {
+  assert.deepEqual(parseNaturalExpense('J’ai payé 45 pour les courses', 'Alex'), { amount: 45, description: 'les courses', paidBy: 'Alex' });
+  assert.deepEqual(parseNaturalExpense('Maya a payé 16,50 pour les produits de nettoyage', 'Alex'), { amount: 16.5, description: 'les produits de nettoyage', paidBy: 'Maya' });
+  assert.equal(parseLocalizedAmount('1 260,50 €', 'fr'), 1260.5);
+});
+
+test('parses Arabic expenses and Arabic-Indic numerals', () => {
+  assert.equal(normalizeDigits('١٢٣ ۴۵۶'), '123 456'); assert.deepEqual(parseNaturalExpense('دفعت ٨٠ للكهرباء', 'Alex'), { amount: 80, description: 'الكهرباء', paidBy: 'Alex' });
+  assert.deepEqual(parseNaturalExpense('دفعت مايا ٢٤ مقابل مواد التنظيف', 'Alex'), { amount: 24, description: 'مواد التنظيف', paidBy: 'مايا' });
+});
+
+test('localized command descriptions retain official command names', () => {
+  for (const locale of ['en', 'fr', 'ar']) for (const command of ['split', 'balance', 'chore', 'chores', 'dashboard', 'help', 'language']) assert.ok(commandsForLocale(locale).some((item) => item.command === command));
+});
+
+test('Mini App localization applies Arabic RTL and keeps the logo unmirrored', () => {
+  const script = fs.readFileSync(path.join(__dirname, '..', 'public', 'i18n.js'), 'utf8'); const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
+  assert.match(script, /documentElement\.dir = locale === 'ar' \? 'rtl' : 'ltr'/); assert.match(css, /\[dir="rtl"\] \.app-logo,\[dir="rtl"\] img\{transform:none\}/);
+});
+
+test('dashboard route opens the Mini App document', async () => {
+  const server = startDashboardServer({ getDashboard: () => ({}), performAction: () => ({}), authenticate: () => ({}), port: 0 }); await new Promise((resolve) => server.once('listening', resolve));
+  try { const response = await fetch(`http://127.0.0.1:${server.address().port}/app`); const html = await response.text(); assert.equal(response.status, 200); assert.match(html, /id="settings-form"/); } finally { server.close(); }
 });

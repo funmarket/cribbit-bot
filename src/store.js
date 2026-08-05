@@ -1,18 +1,19 @@
 const fs = require('fs');
 const { calculateBalances } = require('./balances');
 const { cleanName, createExpense, uniqueNames } = require('./expenses');
+const { normalizeLocale } = require('./i18n');
 
 const now = () => new Date().toISOString();
 const makeId = (prefix) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-const defaultSettings = (houseName = 'My Crib') => ({ houseName, currency: 'USD', timezone: 'UTC', notifications: true, weeklyDigest: true, quietHours: '' });
+const defaultSettings = (houseName = 'My Crib') => ({ houseName, currency: 'USD', timezone: 'UTC', notifications: true, weeklyDigest: true, quietHours: '', defaultLocale: 'en' });
 
 function createStore(dataFile) {
-  const state = { expenses: {}, chores: {}, members: {}, memberProfiles: {}, groceries: {}, activity: {}, settings: {}, processedUpdates: {} };
+  const state = { expenses: {}, chores: {}, members: {}, memberProfiles: {}, groceries: {}, activity: {}, settings: {}, processedUpdates: {}, userPreferences: {} };
   if (fs.existsSync(dataFile)) {
     try { Object.assign(state, JSON.parse(fs.readFileSync(dataFile, 'utf8'))); }
     catch (error) { console.error(`Could not read ${dataFile}; starting with empty data.`, error); }
   }
-  for (const key of ['expenses', 'chores', 'members', 'memberProfiles', 'groceries', 'activity', 'settings', 'processedUpdates']) state[key] ||= {};
+  for (const key of ['expenses', 'chores', 'members', 'memberProfiles', 'groceries', 'activity', 'settings', 'processedUpdates', 'userPreferences']) state[key] ||= {};
 
   function save() {
     const temporaryFile = `${dataFile}.tmp`;
@@ -20,7 +21,10 @@ function createStore(dataFile) {
     fs.renameSync(temporaryFile, dataFile);
   }
   function list(bucket, chatId) { state[bucket][chatId] ||= []; return state[bucket][chatId]; }
-  function settings(chatId, houseName) { state.settings[chatId] ||= defaultSettings(houseName); return state.settings[chatId]; }
+  function settings(chatId, houseName) { state.settings[chatId] ||= defaultSettings(houseName); state.settings[chatId].defaultLocale = normalizeLocale(state.settings[chatId].defaultLocale); return state.settings[chatId]; }
+  function userLocale(telegramId) { return state.userPreferences[String(telegramId)]?.locale || null; }
+  function setUserLocale(telegramId, locale) { const key = String(telegramId); state.userPreferences[key] ||= {}; state.userPreferences[key].locale = normalizeLocale(locale); state.userPreferences[key].updatedAt = now(); save(); return state.userPreferences[key].locale; }
+  function resolveLocale(chatId, telegramUser, options = {}) { const saved = userLocale(telegramUser?.id); const telegramLocale = telegramUser?.language_code ? normalizeLocale(telegramUser.language_code) : null; const houseLocale = settings(chatId).defaultLocale; return options.groupMessage ? houseLocale : saved || telegramLocale || houseLocale || 'en'; }
   function addActivity(chatId, type, message, actor, metadata = {}) {
     const event = { id: makeId('a'), type, message, actor: cleanName(actor), metadata, createdAt: now() };
     const events = list('activity', chatId); events.unshift(event); state.activity[chatId] = events.slice(0, 300); return event;
@@ -32,11 +36,11 @@ function createStore(dataFile) {
     const displayName = cleanName(telegramUser.first_name || telegramUser.username || telegramId);
     let profile = profiles.find((item) => item.telegramId === telegramId);
     if (!profile) {
-      profile = { id: makeId('m'), telegramId, displayName, username: telegramUser.username ? `@${telegramUser.username}` : '', role: profiles.length ? 'member' : 'owner', joinedAt: now(), active: true, awayUntil: null, dietaryPreferences: '', notificationFrequency: 'immediate' };
+      profile = { id: makeId('m'), telegramId, displayName, username: telegramUser.username ? `@${telegramUser.username}` : '', role: profiles.length ? 'member' : 'owner', joinedAt: now(), active: true, awayUntil: null, dietaryPreferences: '', notificationFrequency: 'immediate', locale: userLocale(telegramId) };
       profiles.push(profile);
       addActivity(chatId, 'member.joined', `${displayName} joined the crib`, displayName, { memberId: profile.id });
     } else {
-      profile.displayName = displayName; profile.username = telegramUser.username ? `@${telegramUser.username}` : profile.username; profile.active = true; profile.updatedAt = now();
+      profile.displayName = displayName; profile.username = telegramUser.username ? `@${telegramUser.username}` : profile.username; profile.active = true; profile.locale = userLocale(telegramId); profile.updatedAt = now();
     }
     state.members[chatId] = uniqueNames([...(state.members[chatId] || []), displayName]);
     settings(chatId, houseName);
@@ -76,22 +80,24 @@ function createStore(dataFile) {
   }
   function deleteGrocery(chatId, identifier, actor) { const items = list('groceries', chatId); const item = items.find((g) => g.id === identifier); if (!item) return false; state.groceries[chatId] = items.filter((g) => g.id !== item.id); addActivity(chatId, 'grocery.deleted', `${actor} removed ${item.name}`, actor); save(); return true; }
   function updateSettings(chatId, patch, actor) {
-    const allowed = ['houseName', 'currency', 'timezone', 'notifications', 'weeklyDigest', 'quietHours']; const current = settings(chatId);
+    const allowed = ['houseName', 'currency', 'timezone', 'notifications', 'weeklyDigest', 'quietHours', 'defaultLocale']; const current = settings(chatId);
     if (patch.currency !== undefined) {
       const currency = String(patch.currency).trim().toUpperCase();
       try { new Intl.NumberFormat('en', { style: 'currency', currency }).format(1); } catch { throw Object.assign(new Error('Choose a valid three-letter currency code.'), { statusCode: 400 }); }
       patch = { ...patch, currency };
     }
+    if (patch.defaultLocale !== undefined) patch = { ...patch, defaultLocale: normalizeLocale(patch.defaultLocale) };
     for (const key of allowed) if (patch[key] !== undefined) current[key] = typeof patch[key] === 'string' ? patch[key].trim().slice(0, 80) : Boolean(patch[key]);
     current.updatedAt = now(); addActivity(chatId, 'settings.updated', `${actor} updated house settings`, actor); save(); return current;
   }
   function dashboard(chatId, viewer) {
     const expenses = list('expenses', chatId); const chores = list('chores', chatId); const groceries = list('groceries', chatId); const members = list('memberProfiles', chatId); const balances = calculateBalances(expenses, memberNames(chatId));
-    return { expenses, chores, groceries, members, activity: list('activity', chatId), settings: settings(chatId), balances, viewer: viewer || null };
+    const locale = viewer?.telegramId ? resolveLocale(chatId, { id: viewer.telegramId, language_code: viewer.telegramLanguageCode }) : settings(chatId).defaultLocale;
+    return { expenses, chores, groceries, members, activity: list('activity', chatId), settings: settings(chatId), balances, viewer: viewer ? { ...viewer, locale } : null, locale };
   }
   function markUpdate(updateId) { if (updateId == null) return true; if (state.processedUpdates[updateId]) return false; state.processedUpdates[updateId] = now(); const ids = Object.keys(state.processedUpdates); if (ids.length > 1000) ids.slice(0, ids.length - 1000).forEach((id) => delete state.processedUpdates[id]); save(); return true; }
   function clear(chatId) { for (const key of ['expenses', 'chores', 'members', 'memberProfiles', 'groceries', 'activity', 'settings']) state[key][chatId] = key === 'settings' ? defaultSettings() : []; save(); }
-  return { state, save, registerMember, isMember, memberByTelegramId, memberNames, addExpense, addChore, findChore, updateChore, deleteChore, addGrocery, updateGrocery, deleteGrocery, updateSettings, dashboard, addActivity, markUpdate, clear, settings };
+  return { state, save, registerMember, isMember, memberByTelegramId, memberNames, addExpense, addChore, findChore, updateChore, deleteChore, addGrocery, updateGrocery, deleteGrocery, updateSettings, dashboard, addActivity, markUpdate, clear, settings, userLocale, setUserLocale, resolveLocale };
 }
 
 module.exports = { createStore, defaultSettings };
