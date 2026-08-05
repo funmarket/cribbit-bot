@@ -9,7 +9,7 @@
 <body>
 <div id="loading" class="loading-screen" aria-live="polite"><img src="/logo.png" alt="Cribbit"><div><span></span><span></span><span></span></div><p data-i18n="common.loading">Opening your crib…</p></div>
 <section id="auth-gate" class="auth-gate" hidden>
-  <div class="auth-card"><img src="/logo.png" alt="Cribbit"><p class="kicker">TELEGRAM MINI APP</p><h1>Open Cribbit with your house.</h1><p>Your household data stays connected to the Telegram group where you use Cribbit.</p><a href="https://t.me/Cribbit_bot" class="primary-button">Open @Cribbit_bot</a><a href="?demo=1" class="secondary-button">Explore demo dashboard</a></div>
+  <div class="auth-card"><img src="/logo.png" alt="Cribbit"><p class="kicker">TELEGRAM MINI APP</p><h1 data-i18n="auth.title">Open Cribbit through Telegram</h1><p data-i18n="auth.copy">Your house data is protected by Telegram. Open the bot and tap Dashboard to continue.</p><a href="https://t.me/Cribbit_bot" class="primary-button" data-i18n="auth.button">Open @Cribbit_bot</a><a href="?demo=1" class="secondary-button">Explore demo dashboard</a></div>
 </section>
 <div id="app" class="app-frame" hidden>
   <aside class="sidebar">
@@ -23,10 +23,10 @@
   </aside>
   <div class="app-main">
     <header class="mobile-header"><img src="/logo.png" alt="Cribbit"><div><small>YOUR CRIB</small><strong id="house-name-mobile">My Crib</strong></div><button id="mobile-more" aria-label="Open more navigation">•••</button></header>
-    <div id="demo-banner" class="demo-banner" hidden><span>Demo mode · sample household</span><a href="https://t.me/Cribbit_bot">Open your real crib ↗</a></div>
+    <div id="demo-banner" class="demo-banner" hidden><span data-i18n="dashboard.demo">Demo mode · sample household</span><a href="https://t.me/Cribbit_bot" data-i18n="dashboard.openTelegram">Open your real crib ↗</a></div>
     <main>
       <section class="view" data-panel="overview">
-        <div class="page-header"><div><p class="kicker" id="current-date">TODAY</p><h1 id="greeting">Morning.</h1></div><div class="header-actions"><button class="icon-button" aria-label="Notifications">◇<i></i></button><button class="quick-add" data-modal="expense-modal">＋ Add</button></div></div>
+        <div class="page-header"><div><p class="kicker" id="current-date">TODAY</p><h1 id="greeting">Morning.</h1></div><div class="header-actions"><button class="icon-button" aria-label="Notifications" data-i18n-aria="notifications.title">◇<i></i></button><button class="quick-add" data-modal="expense-modal">＋ <span data-i18n="ui.add">Add</span></button></div></div>
         <div class="balance-grid"><article class="balance-card owed-card"><small data-i18n="dashboard.youAreOwed">YOU’RE OWED</small><strong id="owed-total">$0.00</strong><span id="owed-note">Nothing outstanding</span></article><article class="balance-card owe-card"><small data-i18n="dashboard.youOwe">YOU OWE</small><strong id="owe-total">$0.00</strong><span id="owe-note">Nothing due</span></article></div>
         <div class="quick-actions"><button data-modal="expense-modal"><b>＋</b><span>Add expense</span></button><button data-modal="chore-modal"><b>✓</b><span>Add chore</span></button><button data-view="groceries" data-focus="grocery-input"><b>□</b><span>Add grocery</span></button><button data-view="expenses"><b>↔</b><span>Settle up</span></button></div>
         <section class="card"><div class="card-head"><h2 data-i18n="dashboard.recentExpenses">Recent expenses</h2><button data-view="expenses">View all →</button></div><div id="expense-preview" class="rows"></div></section>
