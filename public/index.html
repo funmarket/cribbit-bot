@@ -1,66 +1,60 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#173f35" />
-    <title>Cribbit Dashboard</title>
-    <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
-    <link rel="stylesheet" href="/styles.css" />
-    <script src="/app.js" defer></script>
-  </head>
-  <body>
-    <main class="shell">
-      <header class="hero">
-        <div>
-          <p class="eyebrow">YOUR SHARED HOME</p>
-          <h1>Cribbit</h1>
-          <p class="subtitle">Balances, expenses and chores—without leaving Telegram.</p>
-        </div>
-        <div class="frog" aria-hidden="true">🐸</div>
-      </header>
-
-      <div id="status" class="status">Loading your household…</div>
-
-      <section id="dashboard" hidden>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#101b24" />
+  <meta name="description" content="Cribbit keeps your shared expenses, balances, and chores together." />
+  <title>Cribbit · Your shared home</title>
+  <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <script src="/app.js" defer></script>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <a class="brand" href="#overview" data-view-link="overview" aria-label="Cribbit overview"><span class="brand-mark" aria-hidden="true">C</span><span>Cribbit</span></a>
+    <a class="telegram-link compact-link" href="https://t.me/Cribbit_bot" target="_blank" rel="noreferrer">Open Telegram <span aria-hidden="true">↗</span></a>
+  </header>
+  <nav class="view-nav" aria-label="Dashboard views">
+    <button class="nav-button active" type="button" data-view="overview" aria-pressed="true">Overview</button>
+    <button class="nav-button" type="button" data-view="expenses" aria-pressed="false">Expenses</button>
+    <button class="nav-button" type="button" data-view="chores" aria-pressed="false">Chores</button>
+  </nav>
+  <main>
+    <section class="intro" id="overview-intro">
+      <div><p class="eyebrow">YOUR SHARED HOME, UPGRADED</p><h1>Know the house <em>vibe.</em></h1><p class="intro-copy">Bills, balances, and chores—updated from Telegram and clear at a glance.</p></div>
+      <button id="refresh-button" class="refresh-button" type="button" aria-label="Refresh household data"><span aria-hidden="true">↻</span> Refresh</button>
+    </section>
+    <div id="status" class="status" role="status" aria-live="polite"><span class="status-dot" aria-hidden="true"></span><span id="status-copy">Loading your household…</span></div>
+    <section id="dashboard" hidden>
+      <section class="view-panel" data-panel="overview">
         <div class="summary-grid">
-          <article class="summary-card accent">
-            <span>Total spent</span>
-            <strong id="total-spent">$0.00</strong>
-          </article>
-          <article class="summary-card">
-            <span>Housemates</span>
-            <strong id="member-count">0</strong>
-          </article>
-          <article class="summary-card">
-            <span>Open chores</span>
-            <strong id="open-chores">0</strong>
-          </article>
+          <article class="summary-card lime-card"><span>TOTAL SPENT</span><strong id="total-spent">$0.00</strong><small>Across this household</small></article>
+          <article class="summary-card cream-card"><span>HOUSEMATES</span><strong id="member-count">0</strong><small>Included in balances</small></article>
+          <article class="summary-card dark-card"><span>OPEN CHORES</span><strong id="open-chores">0</strong><small>Still to get done</small></article>
         </div>
-
-        <section class="panel">
-          <div class="section-heading">
-            <div><span>SETTLE UP</span><h2>Who pays whom</h2></div>
-          </div>
-          <div id="settlements" class="stack"></div>
-        </section>
-
-        <section class="panel">
-          <div class="section-heading">
-            <div><span>RECENT</span><h2>Expenses</h2></div>
-            <span id="expense-count" class="pill">0</span>
-          </div>
-          <div id="expenses" class="stack"></div>
-        </section>
-
-        <section class="panel">
-          <div class="section-heading">
-            <div><span>HOUSE</span><h2>Chores</h2></div>
-            <span id="chore-count" class="pill">0</span>
-          </div>
-          <div id="chores" class="stack"></div>
-        </section>
+        <section class="content-card"><div class="section-heading"><div><span>SETTLE UP</span><h2>Who pays whom</h2></div><a class="text-link telegram-link" href="https://t.me/Cribbit_bot" target="_blank" rel="noreferrer">Open bot ↗</a></div><div id="settlements" class="stack"></div></section>
+        <div class="overview-columns">
+          <section class="content-card"><div class="section-heading"><div><span>RECENT</span><h2>Expenses</h2></div><button class="text-button" type="button" data-view="expenses">View all →</button></div><div id="expense-preview" class="stack"></div></section>
+          <section class="content-card"><div class="section-heading"><div><span>HOUSE</span><h2>Chores</h2></div><button class="text-button" type="button" data-view="chores">View all →</button></div><div id="chore-preview" class="stack"></div></section>
+        </div>
       </section>
-    </main>
-  </body>
+      <section class="view-panel" data-panel="expenses" hidden>
+        <div class="page-heading"><div><p class="eyebrow">THE MONEY</p><h2>Every expense,<br><em>one clear history.</em></h2></div><a class="action-link telegram-link" href="https://t.me/Cribbit_bot" target="_blank" rel="noreferrer">+ Add in Telegram</a></div>
+        <section class="content-card"><div class="section-heading"><div><span>ALL ACTIVITY</span><h2>Expenses</h2></div><span id="expense-count" class="count-pill">0</span></div><div id="expenses" class="stack"></div></section>
+      </section>
+      <section class="view-panel" data-panel="chores" hidden>
+        <div class="page-heading"><div><p class="eyebrow">THE HOUSE</p><h2>Chores, without<br><em>the chasing.</em></h2></div><a class="action-link telegram-link" href="https://t.me/Cribbit_bot" target="_blank" rel="noreferrer">+ Add in Telegram</a></div>
+        <section class="content-card"><div class="section-heading"><div><span>TO-DO LIST</span><h2>House chores</h2></div><span id="chore-count" class="count-pill">0</span></div><div id="chores" class="stack"></div></section>
+      </section>
+    </section>
+    <section class="telegram-cta"><div><p class="eyebrow">ROOMMATES · STUDENT HOUSES · CO-LIVING</p><h2>Put the group chat<br>to better use.</h2></div><a class="cta-button telegram-link" href="https://t.me/Cribbit_bot" target="_blank" rel="noreferrer">Chat with Cribbit <span aria-hidden="true">↗</span></a></section>
+  </main>
+  <footer><a class="brand footer-brand" href="#overview" data-view-link="overview"><span class="brand-mark" aria-hidden="true">C</span><span>Cribbit</span></a><p>Shared living, minus the spreadsheet drama.</p><a href="https://t.me/Cribbit_bot" target="_blank" rel="noreferrer">@Cribbit_bot ↗</a></footer>
+</div>
+</body>
 </html>
