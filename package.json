@@ -1,12 +1,12 @@
 {
   "name": "cribbit-bot",
   "version": "1.0.0",
-  "description": "",
+  "description": "Telegram roommate expense and chore tracker with a Mini App dashboard",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "typecheck": "node --check index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "typecheck": "node --check index.js && node --check src/expenses.js && node --check src/balances.js && node --check src/chores.js && node --check src/dashboard-server.js && node --check public/app.js && node --test",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"

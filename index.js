@@ -2,6 +2,11 @@ require('dotenv').config();
 const { Telegraf } = require('telegraf');
 const fs = require('fs');
 const path = require('path');
+const { calculateBalances } = require('./src/balances');
+const { cleanName, createExpense, parseNaturalExpense, uniqueNames } = require('./src/expenses');
+const { parseChoreInput } = require('./src/chores');
+const { startDashboardServer } = require('./src/dashboard-server');
+const { BOT_COMMANDS } = require('./src/bot-commands');
 
 if (!process.env.BOT_TOKEN) {
   throw new Error('BOT_TOKEN is required. Add it to .env locally or Railway Variables in production.');
@@ -10,203 +15,248 @@ if (!process.env.BOT_TOKEN) {
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const DATA_DIR = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || '.';
 const DATA_FILE = path.join(DATA_DIR, 'expenses.json');
+const PORT = Number(process.env.PORT) || 3000;
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 let groupExpenses = {};
 let groupChores = {};
+let groupMembers = {};
 
 if (fs.existsSync(DATA_FILE)) {
   try {
     const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
     groupExpenses = data.expenses || {};
     groupChores = data.chores || {};
-  } catch (err) {
-    console.log('Starting with empty data');
+    groupMembers = data.members || {};
+  } catch (error) {
+    console.error(`Could not read ${DATA_FILE}; starting with empty data.`, error);
   }
 }
 
 function saveData() {
-  fs.writeFileSync(DATA_FILE, JSON.stringify({
+  const temporaryFile = `${DATA_FILE}.tmp`;
+  fs.writeFileSync(temporaryFile, JSON.stringify({
     expenses: groupExpenses,
-    chores: groupChores
+    chores: groupChores,
+    members: groupMembers
   }, null, 2));
+  fs.renameSync(temporaryFile, DATA_FILE);
+}
+
+function getActorName(ctx) {
+  return cleanName(ctx.from.first_name || ctx.from.username || String(ctx.from.id));
+}
+
+function addMembers(chatId, names) {
+  groupMembers[chatId] = uniqueNames([...(groupMembers[chatId] || []), ...names]);
+  return groupMembers[chatId];
+}
+
+function logExpense(chatId, details, actorName) {
+  if (!groupExpenses[chatId]) groupExpenses[chatId] = [];
+  const members = addMembers(chatId, [actorName, details.paidBy]);
+  const expense = createExpense({ ...details, addedBy: actorName, participants: members });
+  groupExpenses[chatId].push(expense);
+  saveData();
+  return expense;
+}
+
+function dashboardBaseUrl() {
+  if (process.env.MINI_APP_URL) return process.env.MINI_APP_URL.replace(/\/$/, '');
+  if (process.env.RAILWAY_PUBLIC_DOMAIN) return `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+  return null;
+}
+
+function dashboardUrl(chatId) {
+  const baseUrl = dashboardBaseUrl();
+  if (!baseUrl) return null;
+
+  const params = new URLSearchParams({ chatId: String(chatId) });
+  const railwayApiUrl = process.env.RAILWAY_PUBLIC_DOMAIN
+    ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+    : null;
+  if (process.env.MINI_APP_URL && railwayApiUrl) {
+    params.set('apiBaseUrl', railwayApiUrl);
+  }
+  return `${baseUrl}/?${params.toString()}`;
+}
+
+function dashboardKeyboard(chatId) {
+  const url = dashboardUrl(chatId);
+  return url ? { inline_keyboard: [[{ text: 'Open Dashboard', web_app: { url } }]] } : undefined;
 }
 
 bot.start((ctx) => {
-  ctx.reply(`🐸 Cribbit is alive!
+  const replyMarkup = dashboardKeyboard(ctx.chat.id);
+  return ctx.reply(`🐸 Cribbit is alive!
+
+Log expenses naturally:
+Paid 45 for groceries
+Ken paid 30 for pizza
+I paid 20 on Uber
 
 Commands:
-/split 50 pizza
+/split 50 dinner
 /balance
-/chore add clean kitchen
+/chore add clean kitchen @username
 /chores
 /done 1
-/clear`);
+/dashboard
+/clear`, replyMarkup ? { reply_markup: replyMarkup } : undefined);
 });
 
-bot.command('help', (ctx) => {
-  ctx.reply(`Commands:
+bot.command('help', (ctx) => ctx.reply(`Commands:
 /split amount description
 /balance
-/chore add <task>
+/chore add <task> [@username | for Name]
 /chores
 /done <number>
-/clear`);
-});
+/dashboard
+/clear
 
-// ========== EXPENSES ==========
+You can also say: “Paid 45 for groceries”`));
+
 bot.command('split', (ctx) => {
-  const chatId = ctx.chat.id;
-  const text = ctx.message.text;
-  const parts = text.split(' ');
+  const parts = ctx.message.text.trim().split(/\s+/);
+  if (parts.length < 3) return ctx.reply('Format: /split 50 pizza');
 
-  if (parts.length < 3) {
-    return ctx.reply('Format: /split 50 pizza');
-  }
-
-  const amount = parseFloat(parts[1]);
-  const description = parts.slice(2).join(' ');
-
-  if (isNaN(amount) || amount <= 0) {
+  const amount = Number(parts[1].replace(/,/g, ''));
+  const description = parts.slice(2).join(' ').trim();
+  if (!Number.isFinite(amount) || amount <= 0 || !description) {
     return ctx.reply('Please enter a valid amount.\nExample: /split 50 pizza');
   }
 
-  if (!groupExpenses[chatId]) groupExpenses[chatId] = [];
-
-  groupExpenses[chatId].push({
-    amount,
-    description,
-    paidBy: ctx.from.first_name
-  });
-
-  saveData();
-  ctx.reply(`✅ Logged!\n$${amount.toFixed(2)} for ${description}\nPaid by: ${ctx.from.first_name}`);
+  const actorName = getActorName(ctx);
+  const expense = logExpense(ctx.chat.id, { amount, description, paidBy: actorName }, actorName);
+  return ctx.reply(`✅ Logged!\n$${expense.amount.toFixed(2)} for ${expense.description}\nPaid by: ${expense.paidBy}`);
 });
 
 bot.command('balance', (ctx) => {
   const chatId = ctx.chat.id;
   const expenses = groupExpenses[chatId] || [];
+  if (!expenses.length) return ctx.reply('No expenses logged yet.\nUse /split or say “Paid 45 for groceries”.');
 
-  if (expenses.length === 0) {
-    return ctx.reply('No expenses logged yet.\nUse /split to add one.');
+  const balances = calculateBalances(expenses, groupMembers[chatId] || []);
+  let message = `💰 Group Balance\nTotal spent: $${balances.totalSpent.toFixed(2)}\nPeople included: ${balances.memberCount}\n\nWho paid what:\n`;
+
+  for (const [person, amount] of Object.entries(balances.paid)) {
+    message += `• ${person}: $${amount.toFixed(2)}\n`;
   }
 
-  const paid = {};
-  expenses.forEach(exp => {
-    paid[exp.paidBy] = (paid[exp.paidBy] || 0) + exp.amount;
-  });
-
-  const people = Object.keys(paid);
-  const totalSpent = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-  const fairShare = totalSpent / people.length;
-
-  let message = `💰 Group Balance\nTotal spent: $${totalSpent.toFixed(2)}\nFair share: $${fairShare.toFixed(2)}\n\n`;
-
-  message += `Who paid what:\n`;
-  for (const person of people) {
-    message += `• ${person}: $${paid[person].toFixed(2)}\n`;
+  message += '\nNet positions:\n';
+  for (const [person, amount] of Object.entries(balances.net)) {
+    if (amount > 0.01) message += `✅ ${person} should receive $${amount.toFixed(2)}\n`;
+    else if (amount < -0.01) message += `❌ ${person} owes $${Math.abs(amount).toFixed(2)}\n`;
+    else message += `✔️ ${person} is settled\n`;
   }
 
-  message += `\nWho owes what:\n`;
-  for (const person of people) {
-    const amount = paid[person] - fairShare;
-    if (amount > 0.01) {
-      message += `✅ ${person} should receive $${amount.toFixed(2)}\n`;
-    } else if (amount < -0.01) {
-      message += `❌ ${person} owes $${Math.abs(amount).toFixed(2)}\n`;
-    } else {
-      message += `✔️ ${person} is settled\n`;
-    }
+  message += '\nSuggested payments:\n';
+  if (!balances.settlements.length) message += '🎉 Everyone is settled!\n';
+  for (const settlement of balances.settlements) {
+    message += `• ${settlement.from} should pay ${settlement.to} $${settlement.amount.toFixed(2)}\n`;
   }
 
-  ctx.reply(message);
+  return ctx.reply(message);
 });
 
-// ========== CHORES ==========
 bot.command('chore', (ctx) => {
+  const match = ctx.message.text.match(/^\/chore(?:@\w+)?\s+add\s+(.+)$/i);
+  if (!match) return ctx.reply('Format: /chore add clean the kitchen @username');
+
+  const parsed = parseChoreInput(match[1]);
+  if (!parsed) return ctx.reply('Please include a chore description.');
   const chatId = ctx.chat.id;
-  const text = ctx.message.text;
-  const parts = text.split(' ');
-
-  if (parts.length < 3 || parts[1].toLowerCase() !== 'add') {
-    return ctx.reply('Format: /chore add clean the kitchen');
-  }
-
-  const task = parts.slice(2).join(' ');
-
   if (!groupChores[chatId]) groupChores[chatId] = [];
-
   groupChores[chatId].push({
-    task,
-    addedBy: ctx.from.first_name,
-    done: false
+    ...parsed,
+    addedBy: getActorName(ctx),
+    done: false,
+    createdAt: new Date().toISOString()
   });
-
   saveData();
-  ctx.reply(`🧹 Chore added: "${task}"`);
+  return ctx.reply(`🧹 Chore added: “${parsed.task}”${parsed.assignedTo ? `\nAssigned to: ${parsed.assignedTo}` : ''}`);
 });
 
 bot.command('chores', (ctx) => {
-  const chatId = ctx.chat.id;
-  const chores = groupChores[chatId] || [];
-
-  if (chores.length === 0) {
-    return ctx.reply('No chores yet.\nAdd one with:\n/chore add clean kitchen');
-  }
+  const chores = groupChores[ctx.chat.id] || [];
+  if (!chores.length) return ctx.reply('No chores yet.\nAdd one with:\n/chore add clean kitchen @username');
 
   let message = '🧹 Chore List:\n\n';
-  chores.forEach((chore, i) => {
-    const status = chore.done ? '✅' : '⬜';
-    message += `${status} ${i + 1}. ${chore.task}\n`;
+  chores.forEach((chore, index) => {
+    message += `${chore.done ? '✅' : '⬜'} ${index + 1}. ${chore.task}`;
+    if (chore.assignedTo) message += ` — ${chore.assignedTo}`;
+    if (chore.doneBy) message += ` (done by ${chore.doneBy})`;
+    message += '\n';
   });
-
-  message += `\nMark as done with: /done 1`;
-  ctx.reply(message);
+  return ctx.reply(`${message}\nMark as done with: /done 1`);
 });
 
 bot.command('done', (ctx) => {
-  const chatId = ctx.chat.id;
-  const parts = ctx.message.text.split(' ');
-
-  if (parts.length < 2) {
-    return ctx.reply('Format: /done 1');
-  }
-
-  const number = parseInt(parts[1]);
-  const chores = groupChores[chatId] || [];
-
-  if (isNaN(number) || number < 1 || number > chores.length) {
+  const number = Number.parseInt(ctx.message.text.trim().split(/\s+/)[1], 10);
+  const chores = groupChores[ctx.chat.id] || [];
+  if (!Number.isInteger(number) || number < 1 || number > chores.length) {
     return ctx.reply('Please enter a valid chore number.\nUse /chores to see the list.');
   }
 
   const chore = chores[number - 1];
-
-  if (chore.done) {
-    return ctx.reply(`This chore is already done: "${chore.task}"`);
-  }
-
+  if (chore.done) return ctx.reply(`This chore is already done: “${chore.task}”`);
   chore.done = true;
-  chore.doneBy = ctx.from.first_name;
+  chore.doneBy = getActorName(ctx);
+  chore.completedAt = new Date().toISOString();
   saveData();
+  return ctx.reply(`✅ Done! “${chore.task}” marked as completed by ${chore.doneBy}`);
+});
 
-  ctx.reply(`✅ Done! "${chore.task}" marked as completed by ${ctx.from.first_name}`);
+bot.command('dashboard', (ctx) => {
+  const replyMarkup = dashboardKeyboard(ctx.chat.id);
+  if (!replyMarkup) {
+    return ctx.reply('Dashboard URL is not configured yet. Set MINI_APP_URL or generate a Railway public domain.');
+  }
+  return ctx.reply('Your Cribbit household dashboard:', { reply_markup: replyMarkup });
 });
 
 bot.command('clear', (ctx) => {
-  const chatId = ctx.chat.id;
-  groupExpenses[chatId] = [];
-  groupChores[chatId] = [];
+  groupExpenses[ctx.chat.id] = [];
+  groupChores[ctx.chat.id] = [];
+  groupMembers[ctx.chat.id] = [];
   saveData();
-  ctx.reply('🧹 All expenses and chores in this group have been cleared.');
+  return ctx.reply('🧹 All expenses and chores in this group have been cleared.');
 });
 
-bot.launch()
+bot.on('text', (ctx) => {
+  const actorName = getActorName(ctx);
+  const parsed = parseNaturalExpense(ctx.message.text, actorName);
+  if (!parsed) return;
+  const expense = logExpense(ctx.chat.id, parsed, actorName);
+  return ctx.reply(`✅ Logged!\n$${expense.amount.toFixed(2)} for ${expense.description}\nPaid by: ${expense.paidBy}`);
+});
+
+bot.catch((error, ctx) => {
+  console.error(`Bot error for update ${ctx.update.update_id}:`, error);
+});
+
+const dashboardServer = startDashboardServer({
+  getExpenses: (chatId) => groupExpenses[chatId] || [],
+  getChores: (chatId) => groupChores[chatId] || [],
+  getMembers: (chatId) => groupMembers[chatId] || [],
+  port: PORT,
+  allowedOrigin: process.env.MINI_APP_URL || null
+});
+
+bot.telegram.setMyCommands(BOT_COMMANDS)
+  .then(() => bot.launch())
   .then(() => console.log(`Cribbit bot is running. Data file: ${DATA_FILE}`))
-  .catch((err) => {
-    console.error('Failed to start Cribbit:', err);
+  .catch((error) => {
+    console.error('Failed to start Cribbit:', error);
+    dashboardServer.close();
     process.exit(1);
   });
 
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+function shutdown(signal) {
+  bot.stop(signal);
+  dashboardServer.close();
+}
+
+process.once('SIGINT', () => shutdown('SIGINT'));
+process.once('SIGTERM', () => shutdown('SIGTERM'));
