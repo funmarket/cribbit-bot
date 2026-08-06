@@ -68,19 +68,22 @@ Mode-specific commands should be highlighted and tone-matched, but they should n
 
 | Mode key | Display name | Audience | Personality |
 | --- | --- | --- | --- |
+| `classic` | Classic | universal / no-flavour groups | neutral, clean, direct |
 | `roomies` | Roomies | roommates / flatshare | practical, direct, calm |
-| `cubs` | Cubs | friends / social house | playful, party-energy, teasing but helpful |
-| `nest` | Nest | family / household | warm, organized, gentle |
+| `buds` | Buds | friend groups / social spending | chaotic fun, casual, loud |
+| `ladiessecret` | LadiesSecret | girls' circles / private social planning | warm, inclusive, a little extra |
 | `twinsoul` | TwinSoul | couples | intimate, soft, thoughtful |
-| `colleagues` | Colleagues | work team / office | clear, professional, action-oriented |
-| `buddies` | Buddies | sports / events / hobby partners | energetic, casual, team-focused |
-| `crew` | Crew | travel / project group | mission-style, coordinated, practical |
-| `guild` | Guild | gaming / online community | playful, quest-like, achievement-flavored |
+| `famsquad` | FamSquad | family / household | warm, organized, grounded |
+| `schoolbuddies` | SchoolBuddies | student groups / cohorts | casual, relatable, self-aware broke |
+| `workcrew` | WorkCrew | work team / office | professional, efficient, low-drama |
+| `wandercrew` | WanderCrew | travel groups | adventurous, global, energetic |
+| `pawpack` | PawPack | pet co-owners | warm, caring, pet-focused |
 
 Future optional modes:
 
 | Mode key | Display name | Use case |
 | --- | --- | --- |
+| `guild` | Guild | gaming and online communities |
 | `studio` | Studio | creators, artists, shared creative spaces |
 | `lab` | Lab | student groups, research groups, hackathons |
 | `camp` | Camp | retreats, temporary group stays |
@@ -89,6 +92,44 @@ Future optional modes:
 Do not add future modes to production command/menu behavior until the mode definition, tests, dashboard support, and copy are ready.
 
 ## 4. Mode command map
+
+### Command map rule for modes
+
+Each mode must separate active commands from planned commands:
+
+- `primaryCommands`: commands already implemented in `index.js` and safe to suggest today;
+- `plannedCommands`: product ideas that must not be added to `src/bot-commands.js` or the Telegram command menu until handlers, persistence, tests, and help text exist.
+
+Do not copy command lists from reference files directly into BotFather, `src/bot-commands.js`, or per-chat Telegram command scopes.
+
+### Classic
+
+Primary focus:
+
+```text
+/split
+/balance
+/settle
+/last
+/undo
+/void
+/dashboard
+/settings
+/help
+```
+
+Planned commands:
+
+```text
+none
+```
+
+Overview cards:
+
+- balances;
+- recent expenses;
+- quick actions;
+- settings.
 
 ### Roomies
 
@@ -107,6 +148,17 @@ Primary focus:
 /tab
 ```
 
+Planned commands:
+
+```text
+/bills
+/away
+/inventory
+/rules
+/housemeet
+/cleaner
+```
+
 Overview cards:
 
 - balances;
@@ -115,7 +167,7 @@ Overview cards:
 - house rules;
 - quiet hours.
 
-### Cubs
+### Buds
 
 Primary focus:
 
@@ -129,6 +181,17 @@ Primary focus:
 /dinner
 ```
 
+Planned commands:
+
+```text
+/trip
+/vibe
+/roast
+/poll
+/streak
+/dare
+```
+
 Overview cards:
 
 - party mode;
@@ -137,29 +200,38 @@ Overview cards:
 - fund goals;
 - recent activity.
 
-### Nest
+### LadiesSecret
 
 Primary focus:
 
 ```text
+/fundme
+/chipin
+/funds
+/party
 /dinner
-/pickup
-/sundayplan
-/grocery
-/groceries
-/chore
-/chores
-/quiethours
+/tab
+/activity
+```
+
+Planned commands:
+
+```text
+/ladiesnight
+/brunch
+/spa
+/glow
+/secret
+/birthplan
 ```
 
 Overview cards:
 
-- dinner plan;
-- pickup tasks;
-- groceries;
-- chores;
-- quiet hours;
-- weekly plan.
+- group funds;
+- social plans;
+- activity;
+- private/planned expenses warning;
+- dashboard quick actions.
 
 ### TwinSoul
 
@@ -174,6 +246,17 @@ Primary focus:
 /balance
 ```
 
+Planned commands:
+
+```text
+/datenight
+/goal
+/anniversary
+/mine
+/surprise
+/moodcheck
+```
+
 Overview cards:
 
 - date plan;
@@ -182,7 +265,78 @@ Overview cards:
 - shared expenses;
 - dinner plan.
 
-### Colleagues
+### FamSquad
+
+Primary focus:
+
+```text
+/dinner
+/pickup
+/sundayplan
+/grocery
+/groceries
+/chore
+/chores
+/quiethours
+```
+
+Planned commands:
+
+```text
+/dinnerfund
+/reunion
+/kids
+/occasion
+/allowance
+/household
+```
+
+Overview cards:
+
+- dinner plan;
+- pickup tasks;
+- groceries;
+- chores;
+- quiet hours;
+- weekly plan.
+
+### SchoolBuddies
+
+Primary focus:
+
+```text
+/split
+/balance
+/settle
+/fundme
+/chipin
+/funds
+/sundayplan
+/tab
+/activity
+```
+
+Planned commands:
+
+```text
+/textbook
+/studysesh
+/gradtrip
+/semester
+/broke
+/project
+/library
+```
+
+Overview cards:
+
+- shared costs;
+- fund goals;
+- study/project plan;
+- activity;
+- recent expenses.
+
+### WorkCrew
 
 Primary focus:
 
@@ -197,6 +351,17 @@ Primary focus:
 /activity
 ```
 
+Planned commands:
+
+```text
+/teamlunch
+/offsite
+/reimburse
+/receipt
+/teamfund
+/report
+```
+
 Overview cards:
 
 - pending corrections;
@@ -205,29 +370,7 @@ Overview cards:
 - weekly plan;
 - activity log.
 
-### Buddies
-
-Primary focus:
-
-```text
-/ding
-/sundayplan
-/tab
-/fundme
-/chipin
-/funds
-/party
-```
-
-Overview cards:
-
-- game/event plan;
-- shared tab;
-- who is free;
-- funds;
-- activity.
-
-### Crew
+### WanderCrew
 
 Primary focus:
 
@@ -241,35 +384,58 @@ Primary focus:
 /corrections
 ```
 
+Planned commands:
+
+```text
+/trip
+/legs
+/currency
+/convert
+/packing
+/itinerary
+/postcard
+```
+
 Overview cards:
 
-- mission plan;
+- trip/mission plan;
 - shared costs;
 - funds;
 - unresolved corrections;
 - activity.
 
-### Guild
+### PawPack
 
 Primary focus:
 
 ```text
-/ding
-/party
-/tab
-/mood
+/split
+/balance
+/settle
 /fundme
 /chipin
 /funds
+/chore
+/chores
+```
+
+Planned commands:
+
+```text
+/vet
+/petfood
+/walk
+/petfund
+/care
 ```
 
 Overview cards:
 
-- guild status;
-- active quests/plans;
-- shared tab;
-- fund goals;
-- mood/check-in.
+- pet fund;
+- care tasks;
+- recent pet expenses;
+- balances;
+- activity.
 
 ## 5. Implementation phases
 
@@ -292,14 +458,14 @@ Exit criteria:
 
 ### Phase 1 — Mode model and source module
 
-Status: complete through Slice C
+Status: complete through Slice C; taxonomy refinement pending in Slice C.5
 
 Tasks:
 
 - [x] Add `src/modes.js`.
 - [x] Define mode keys, display names, descriptions, tone labels, primary commands, dashboard cards, and aliases.
-- [x] Add `cribMode: "roomies"` to default settings.
-- [x] Normalize invalid/missing modes back to `roomies`.
+- [x] Add `cribMode` to default settings.
+- [x] Normalize invalid/missing modes safely; Slice C.5 will change fallback from `roomies` to `classic`.
 - [x] Export helpers such as:
   - `normalizeMode(value)`;
   - `modeDefinition(value)`;
@@ -313,6 +479,7 @@ Exit criteria:
 - Mode definitions are centralized.
 - Store settings persist a valid mode.
 - Invalid mode data cannot crash the bot or dashboard.
+- Final public taxonomy is recorded before `/mode` is exposed.
 
 Slice B note: `cribMode` persistence remains intentionally unchecked here because `modeplan.md` assigns it to Slice C.
 
@@ -320,20 +487,24 @@ Slice B note: `cribMode` persistence remains intentionally unchecked here becaus
 
 Status: pending
 
+Do not start until Slice C.5 is complete and merged.
+
 Tasks:
 
 - [ ] Add `/mode` to `src/bot-commands.js` only when the handler is implemented in the same PR.
 - [ ] Register `bot.command('mode', ...)`.
 - [ ] Support:
   - `/mode`;
+  - `/mode classic`;
   - `/mode roomies`;
-  - `/mode cubs`;
-  - `/mode nest`;
+  - `/mode buds`;
+  - `/mode ladiessecret`;
   - `/mode twinsoul`;
-  - `/mode colleagues`;
-  - `/mode buddies`;
-  - `/mode crew`;
-  - `/mode guild`.
+  - `/mode famsquad`;
+  - `/mode schoolbuddies`;
+  - `/mode workcrew`;
+  - `/mode wandercrew`;
+  - `/mode pawpack`.
 - [ ] In groups, only owner/admin can change the mode.
 - [ ] In private chat, show the user's known Cribs and explain mode is set per Crib.
 - [ ] Update `/help` so it includes `/mode` and shows current mode suggestions.
@@ -418,7 +589,7 @@ Tasks:
 - [ ] Do not duplicate divergent mode definitions in frontend and backend.
 - [ ] Show cards relevant to each mode while preserving balances and key household state.
 - [ ] Make mobile layout fit at 375px and 390px widths.
-- [ ] Keep `Roomies` as the default dashboard shape.
+- [ ] Keep `Classic` as the default dashboard shape.
 
 Exit criteria:
 
@@ -546,8 +717,8 @@ Exact files to change, in order:
 Expected `src\modes.js` exports:
 
 ```js
-const DEFAULT_MODE = 'roomies';
-const MODE_DEFINITIONS = { /* roomies, cubs, nest, twinsoul, colleagues, buddies, crew, guild */ };
+const DEFAULT_MODE = 'roomies'; // historical Slice B state; Slice C.5 changes this to classic
+const MODE_DEFINITIONS = { /* historical temporary modes; Slice C.5 finalizes launch taxonomy */ };
 function normalizeMode(value) {}
 function modeDefinition(value) {}
 function modeNames() {}
@@ -558,11 +729,11 @@ module.exports = { DEFAULT_MODE, MODE_DEFINITIONS, normalizeMode, modeDefinition
 
 Test checklist:
 
-- [ ] `normalizeMode()` returns `roomies` for empty, unknown, null, and invalid values.
+- [ ] `normalizeMode()` returns the configured `DEFAULT_MODE` for empty, unknown, null, and invalid values.
 - [ ] Every mode has `key`, `name`, `audience`, `personality`, `primaryCommands`, `overviewCards`, and `tone`.
 - [ ] Every primary command referenced by a mode exists in `BOT_COMMANDS` or is intentionally marked as future.
 - [ ] `commandsForMode('twinsoul')` includes `/date`, `/ours`, and `/mood`.
-- [ ] `commandsForMode('nest')` includes `/pickup`, `/sundayplan`, and `/dinner`.
+- [ ] mode aliases are covered by Slice C.5 before `/mode` launches.
 
 Commands:
 
@@ -656,6 +827,146 @@ Command menu changed: no
 Known repair included: restored registerMember profile creation from a dirty partial local edit before continuing
 ```
 
+### Slice C.5 — Finalize public mode taxonomy before `/mode`
+
+Purpose: replace the temporary mode set with the final public taxonomy before exposing `/mode`, while preventing command-menu drift.
+
+Reference files:
+
+1. `C:\Users\GrowB\Downloads\cribbit_modes_reference.html`
+2. `C:\Users\GrowB\Downloads\files (3).zip`
+3. `C:\tmp\cribbit-files3-review\crib-modes.js`
+
+Reference files are read-only. Do not copy them directly into production. Do not create `src\crib-modes.js`.
+
+Exact files to change, in order:
+
+1. Edit `C:\Users\GrowB\cribbit-bot\src\modes.js`
+2. Edit `C:\Users\GrowB\cribbit-bot\src\store.js`
+3. Edit `C:\Users\GrowB\cribbit-bot\test\cribbit.test.js`
+4. Edit `C:\Users\GrowB\cribbit-bot\modeplan.md`
+
+Do not change in this slice:
+
+- `C:\Users\GrowB\cribbit-bot\index.js`
+- `C:\Users\GrowB\cribbit-bot\src\bot-commands.js`
+- `C:\Users\GrowB\cribbit-bot\locales\*.json`
+- `C:\Users\GrowB\cribbit-bot\public\*.js`
+- `C:\Users\GrowB\cribbit-bot\public\locales\*.json`
+- Telegram command menu
+- BotFather menu
+- Railway or Vercel settings
+
+Mode taxonomy checklist:
+
+- [ ] Change `DEFAULT_MODE` from `roomies` to `classic`.
+- [ ] Add `classic`.
+- [ ] Keep `roomies`.
+- [ ] Replace `cubs` with `buds`.
+- [ ] Add `ladiessecret`.
+- [ ] Keep `twinsoul`.
+- [ ] Replace `nest` with `famsquad`.
+- [ ] Add `schoolbuddies`.
+- [ ] Replace `colleagues` with `workcrew`.
+- [ ] Replace `crew` with `wandercrew`.
+- [ ] Add `pawpack`.
+- [ ] Move `guild` to future/backlog unless explicitly re-approved for launch.
+
+Compatibility aliases checklist:
+
+- [ ] `cubs` normalizes to `buds`.
+- [ ] `buddies` normalizes to `buds`.
+- [ ] `nest` normalizes to `famsquad`.
+- [ ] `family` normalizes to `famsquad`.
+- [ ] `colleagues` normalizes to `workcrew`.
+- [ ] `work` normalizes to `workcrew`.
+- [ ] `crew` normalizes to `wandercrew`.
+- [ ] `travel` normalizes to `wandercrew`.
+- [ ] `couple` normalizes to `twinsoul`.
+- [ ] empty, null, and unknown values normalize to `classic`.
+
+Mode definition fields checklist:
+
+- [ ] Every mode has `key`.
+- [ ] Every mode has `name`.
+- [ ] Every mode has `emoji`.
+- [ ] Every mode has `tagline`.
+- [ ] Every mode has `audience`.
+- [ ] Every mode has `personality`.
+- [ ] Every mode has `tone`.
+- [ ] Every mode has `memberLabel`.
+- [ ] Every mode has `houseLabel`.
+- [ ] Every mode has `color`.
+- [ ] Every mode has `primaryCommands`.
+- [ ] Every mode has `plannedCommands`.
+- [ ] Every mode has `overviewCards`.
+
+Command safety checklist:
+
+- [ ] `primaryCommands` contains only commands already present in `BOT_COMMANDS`.
+- [ ] `plannedCommands` can contain future commands from the reference files.
+- [ ] No `plannedCommands` are added to `src\bot-commands.js`.
+- [ ] No `plannedCommands` are advertised as working in `/help`.
+- [ ] No per-chat command scopes are introduced.
+- [ ] No BotFather command changes are required.
+
+Store/default checklist:
+
+- [ ] `defaultSettings().cribMode` becomes `classic`.
+- [ ] Existing saved values such as `roomies`, `nest`, `cubs`, `colleagues`, and `crew` normalize safely.
+- [ ] Dashboard payload still includes `settings.cribMode`.
+- [ ] No existing settings keys are removed or renamed.
+
+Test checklist:
+
+- [ ] `DEFAULT_MODE === "classic"`.
+- [ ] `normalizeMode(null) === "classic"`.
+- [ ] `normalizeMode("not-a-mode") === "classic"`.
+- [ ] `normalizeMode("cubs") === "buds"`.
+- [ ] `normalizeMode("buddies") === "buds"`.
+- [ ] `normalizeMode("nest") === "famsquad"`.
+- [ ] `normalizeMode("colleagues") === "workcrew"`.
+- [ ] `normalizeMode("crew") === "wandercrew"`.
+- [ ] `modeNames()` returns exactly the launch modes in product order.
+- [ ] Every `primaryCommands` entry exists in `BOT_COMMANDS`.
+- [ ] `plannedCommands` are allowed to be absent from `BOT_COMMANDS`.
+- [ ] Store default mode is `classic`.
+- [ ] Store update/reload preserves a valid new mode.
+- [ ] Store update/reload normalizes an old alias to the new key.
+
+Commands:
+
+```powershell
+npm run typecheck
+npm run build
+git diff --check
+```
+
+Exit criteria:
+
+- Final launch mode taxonomy is centralized in `src\modes.js`.
+- Default mode is `classic`.
+- Old temporary mode keys remain safe as aliases.
+- No command menu changes happen in this slice.
+- No runtime Telegram behavior changes beyond safe normalization of `cribMode`.
+
+Evidence block to fill:
+
+```text
+Slice: C.5 — Finalize public mode taxonomy
+Starting commit:
+Local commit:
+PR:
+Merge commit:
+Files changed:
+npm run typecheck:
+npm run build:
+git diff --check:
+Runtime behavior changed:
+Command menu changed:
+Known unverified items:
+```
+
 ### Slice D — Add `/mode` command and command-menu sync
 
 Purpose: expose mode control in Telegram only after persistence exists.
@@ -676,14 +987,17 @@ Exact files to change, in order:
 Command behavior:
 
 - [ ] `/mode` shows current mode, all available modes, and suggested commands.
+- [ ] `/mode classic` sets Classic mode.
 - [ ] `/mode roomies` sets Roomies mode.
-- [ ] `/mode cubs` sets Cubs mode.
-- [ ] `/mode nest` sets Nest mode.
+- [ ] `/mode buds` sets Buds mode.
+- [ ] `/mode ladiessecret` sets LadiesSecret mode.
 - [ ] `/mode twinsoul` sets TwinSoul mode.
-- [ ] `/mode colleagues` sets Colleagues mode.
-- [ ] `/mode buddies` sets Buddies mode.
-- [ ] `/mode crew` sets Crew mode.
-- [ ] `/mode guild` sets Guild mode.
+- [ ] `/mode famsquad` sets FamSquad mode.
+- [ ] `/mode schoolbuddies` sets SchoolBuddies mode.
+- [ ] `/mode workcrew` sets WorkCrew mode.
+- [ ] `/mode wandercrew` sets WanderCrew mode.
+- [ ] `/mode pawpack` sets PawPack mode.
+- [ ] Old aliases such as `/mode nest`, `/mode cubs`, `/mode colleagues`, and `/mode crew` still map safely to the new keys.
 - [ ] Invalid values show a helpful list and do not change settings.
 - [ ] In groups, only owner/admin can change mode.
 - [ ] In groups, non-admin users can still run `/mode` read-only.
@@ -709,7 +1023,7 @@ Deployment verification after merge:
 
 - [ ] Telegram `getMyCommands` returns the same count for default, `en`, `fr`, and `ar`.
 - [ ] `/mode` in Telegram does not hit unknown-command fallback.
-- [ ] `/mode nest` persists and `/mode` shows Nest afterward.
+- [ ] `/mode famsquad` persists and `/mode` shows FamSquad afterward.
 
 Exit criteria:
 
@@ -746,8 +1060,8 @@ Tests:
 - [ ] `/help` content includes current mode name.
 - [ ] Roomies help suggests `/split`, `/chore`, `/groceries`.
 - [ ] TwinSoul help suggests `/date`, `/ours`, `/mood`.
-- [ ] Nest help suggests `/pickup`, `/dinner`, `/sundayplan`.
-- [ ] Colleagues help suggests `/corrections`, `/confirm`, `/reject`.
+- [ ] FamSquad help suggests `/pickup`, `/dinner`, `/sundayplan`.
+- [ ] WorkCrew help suggests `/corrections`, `/confirm`, `/reject`.
 
 Commands:
 
@@ -830,14 +1144,16 @@ Exact files to change, in order:
 Implementation checklist:
 
 - [ ] Keep balance cards visible in every mode.
+- [ ] Classic emphasizes balances, recent expenses, quick actions, and settings.
 - [ ] Roomies emphasizes chores, groceries, rules.
-- [ ] Cubs emphasizes party, tab, ding, funds.
-- [ ] Nest emphasizes dinner, pickup, groceries, quiet hours.
+- [ ] Buds emphasizes party, tab, ding, funds.
+- [ ] LadiesSecret emphasizes group funds, social plans, activity, and privacy-safe planned features.
 - [ ] TwinSoul emphasizes date, mood, ours, dinner.
-- [ ] Colleagues emphasizes corrections, weekly plan, activity.
-- [ ] Buddies emphasizes event plan, tab, ding, funds.
-- [ ] Crew emphasizes plan, funds, tab, corrections.
-- [ ] Guild emphasizes quests/plans, tab, party, mood.
+- [ ] FamSquad emphasizes dinner, pickup, groceries, quiet hours.
+- [ ] SchoolBuddies emphasizes shared costs, funds, study/project plans, and activity.
+- [ ] WorkCrew emphasizes corrections, weekly plan, activity.
+- [ ] WanderCrew emphasizes trip plan, funds, tab, corrections.
+- [ ] PawPack emphasizes pet funds, care tasks, pet expenses, and balances.
 - [ ] Avoid duplicating mode definitions separately in backend and frontend.
 
 Tests:
@@ -1048,7 +1364,7 @@ Expected settings shape:
   "quietHours": "",
   "houseRules": "",
   "partyMode": false,
-  "cribMode": "roomies",
+  "cribMode": "classic",
   "defaultLocale": "en"
 }
 ```
@@ -1084,9 +1400,9 @@ Do not implement these until core modes are stable:
 - `Tiny trophies`: “Kitchen Goblin defeated” after cleaning streaks.
 - `Peace treaty`: guided settle-up message after conflicts.
 - `Snack radar`: grocery items everyone keeps adding.
-- `Main character mode`: temporary event owner for Cubs/Buddies/Crew.
-- `Quest board`: Guild/Crew version of chores and plans.
-- `Family command center`: Nest dashboard layout for dinner, pickups, groceries, chores.
+- `Main character mode`: temporary event owner for Buds/WanderCrew.
+- `Quest board`: Guild/WanderCrew version of chores and plans.
+- `Family command center`: FamSquad dashboard layout for dinner, pickups, groceries, chores.
 - `TwinSoul rituals`: recurring date/mood/dinner reminders.
 
 ## 10. Stop conditions
