@@ -14,6 +14,7 @@ const { startDashboardServer } = require('../src/dashboard-server');
 const { dashboardUrl, menuAppUrl, mainAppUrl, dashboardReplyMarkup } = require('../src/dashboard-links');
 const { BOT_COMMANDS, commandsForLocale } = require('../src/bot-commands');
 const { normalizeLocale, translate, missingTranslationKeys } = require('../src/i18n');
+const { normalizedOrigin, resolveApiBaseUrl, preferredHouseId } = require('../public/app-config');
 
 test('parses natural-language expenses including participant rules', () => {
   assert.deepEqual(parseNaturalExpense('Paid 45 for groceries', 'Alex'), { amount: 45, description: 'groceries', paidBy: 'Alex' });
@@ -50,10 +51,37 @@ test('discovers only active shared-house memberships for a Telegram user', (t) =
   assert.deepEqual(store.housesForTelegramId(42).map(({ chatId, houseName }) => ({ chatId, houseName })), [{ chatId: '-1001', houseName: 'Oak Street' }, { chatId: '-1002', houseName: 'Pine House' }]);
 });
 
+test('persists an authorized active Crib and clears it when membership becomes inactive', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-active-house-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true })); const file = path.join(directory, 'data.json'); const store = createStore(file);
+  store.registerMember('-1001', { id: 42, first_name: 'Alex' }, 'Oak Street'); store.registerMember('-1002', { id: 42, first_name: 'Alex' }, 'Pine House'); store.registerMember('-1002', { id: 7, first_name: 'Maya' }, 'Pine House');
+  assert.equal(store.activeChatId(42), null); assert.equal(store.setActiveChatId(42, '-1002'), '-1002'); assert.equal(createStore(file).activeChatId(42), '-1002');
+  assert.throws(() => store.setActiveChatId(7, '-1001'), /not an active member/);
+  store.state.memberProfiles['-1002'].find((member) => member.telegramId === '42').active = false; store.save();
+  assert.equal(store.activeChatId(42), null); assert.equal(store.state.userPreferences['42'].activeChatId, undefined);
+  store.setActiveChatId(42, '-1001'); delete store.state.memberProfiles['-1001']; store.save();
+  assert.equal(store.activeChatId(42), null);
+});
+
 test('builds canonical inline and global menu Mini App URLs', () => {
   const env = { MINI_APP_URL: 'https://cribbit-dashboard-sigma.vercel.app/app', RAILWAY_PUBLIC_DOMAIN: 'cribbit-production.up.railway.app' };
   assert.equal(dashboardUrl(env, -1001), 'https://cribbit-dashboard-sigma.vercel.app/app?chatId=-1001&apiBaseUrl=https%3A%2F%2Fcribbit-production.up.railway.app');
   assert.equal(menuAppUrl(env), 'https://cribbit-dashboard-sigma.vercel.app/app?apiBaseUrl=https%3A%2F%2Fcribbit-production.up.railway.app');
+});
+
+test('uses a valid API override and safely falls back to the current app origin', () => {
+  assert.equal(normalizedOrigin('https://cribbit-bot-production.up.railway.app/path'), 'https://cribbit-bot-production.up.railway.app');
+  assert.equal(resolveApiBaseUrl('https://railway.example/api', 'https://app.example'), 'https://railway.example');
+  assert.equal(resolveApiBaseUrl('https%', 'https://cribbit-dashboard-sigma.vercel.app'), 'https://cribbit-dashboard-sigma.vercel.app');
+  assert.equal(resolveApiBaseUrl('', 'http://127.0.0.1:3000'), 'http://127.0.0.1:3000');
+  assert.ok(require('../vercel.json').rewrites.some((route) => route.source === '/api/:path*' && route.destination === 'https://cribbit-bot-production.up.railway.app/api/:path*'));
+});
+
+test('selects only an available saved Crib and otherwise auto-selects a sole membership', () => {
+  const houses = [{ chatId: '-1' }, { chatId: '-2' }];
+  assert.equal(preferredHouseId(houses, '-2'), '-2');
+  assert.equal(preferredHouseId(houses, '-9'), null);
+  assert.equal(preferredHouseId([{ chatId: '-1' }], null), '-1');
+  assert.equal(preferredHouseId([], '-1'), null);
 });
 
 test('uses private Web App buttons only in private chats and group-safe Main App links in groups', () => {
@@ -95,12 +123,15 @@ test('serves authenticated dashboard data and persistent actions', async (t) => 
     getDashboard: (_chatId, viewer) => ({ viewer, expenses: [], chores: [], groceries, members: [], activity: [], settings: { currency: 'USD' }, balances: calculateBalances([]) }),
     performAction: (_chatId, action, payload) => { if (action !== 'grocery.add') throw Object.assign(new Error('Unsupported'), { statusCode: 400 }); const item = { id: 'g1', name: payload.name }; groceries.push(item); return item; },
     listHouses: (initData) => { if (initData !== 'valid') throw Object.assign(new Error('Unauthorized'), { statusCode: 401 }); return { houses: [{ chatId: '123', houseName: 'Oak Street' }] }; },
+    setActiveHouse: (initData, chatId) => { if (initData !== 'valid') throw Object.assign(new Error('Unauthorized'), { statusCode: 401 }); if (chatId !== '123') throw Object.assign(new Error('Forbidden'), { statusCode: 403 }); return { activeChatId: chatId }; },
     authenticate: (initData) => { if (initData !== 'valid') throw Object.assign(new Error('Unauthorized'), { statusCode: 401 }); return { displayName: 'Alex' }; }, port: 0, allowedOrigin: 'https://cribbit.vercel.app'
   });
   await new Promise((resolve) => server.once('listening', resolve)); t.after(() => server.close()); const base = `http://127.0.0.1:${server.address().port}`;
   const denied = await fetch(`${base}/api/dashboard?chatId=123`); assert.equal(denied.status, 401);
   const deniedHouses = await fetch(`${base}/api/houses`); assert.equal(deniedHouses.status, 401);
   const housesResponse = await fetch(`${base}/api/houses`, { headers: { Origin: 'https://cribbit.vercel.app', 'X-Telegram-Init-Data': 'valid' } }); assert.equal(housesResponse.status, 200); assert.deepEqual((await housesResponse.json()).houses, [{ chatId: '123', houseName: 'Oak Street' }]);
+  const activeCrib = await fetch(`${base}/api/preferences/active-crib`, { method: 'PUT', headers: { Origin: 'https://cribbit.vercel.app', 'Content-Type': 'application/json', 'X-Telegram-Init-Data': 'valid' }, body: JSON.stringify({ chatId: '123' }) }); assert.equal(activeCrib.status, 200); assert.equal((await activeCrib.json()).activeChatId, '123');
+  const forbiddenCrib = await fetch(`${base}/api/preferences/active-crib`, { method: 'PUT', headers: { Origin: 'https://cribbit.vercel.app', 'Content-Type': 'application/json', 'X-Telegram-Init-Data': 'valid' }, body: JSON.stringify({ chatId: '999' }) }); assert.equal(forbiddenCrib.status, 403);
   const action = await fetch(`${base}/api/action`, { method: 'POST', headers: { Origin: 'https://cribbit.vercel.app', 'Content-Type': 'application/json', 'X-Telegram-Init-Data': 'valid' }, body: JSON.stringify({ chatId: '123', action: 'grocery.add', payload: { name: 'Milk' } }) }); assert.equal(action.status, 200);
   const response = await fetch(`${base}/api/dashboard?chatId=123`, { headers: { Origin: 'https://cribbit.vercel.app', 'X-Telegram-Init-Data': 'valid' } }); const body = await response.json(); assert.equal(response.status, 200); assert.equal(response.headers.get('access-control-allow-origin'), 'https://cribbit.vercel.app'); assert.equal(body.groceries[0].name, 'Milk');
 });
@@ -185,7 +216,7 @@ test('form submissions close only after success and block duplicate requests', a
   assert.equal(submitButton.disabled, false);
 });
 
-test('dashboard route opens the Mini App document with required form assets', async () => {
+test('dashboard route opens the Mini App document with required runtime assets', async () => {
   const server = startDashboardServer({ getDashboard: () => ({}), performAction: () => ({}), authenticate: () => ({}), port: 0 }); await new Promise((resolve) => server.once('listening', resolve));
-  try { const base = `http://127.0.0.1:${server.address().port}`; const response = await fetch(`${base}/app`); const html = await response.text(); assert.equal(response.status, 200); assert.match(html, /id="settings-form"/); assert.match(html, /src="\/form-submit\.js"/); const helper = await fetch(`${base}/form-submit.js`); assert.equal(helper.status, 200); assert.match(helper.headers.get('content-type'), /application\/javascript/); } finally { server.close(); }
+  try { const base = `http://127.0.0.1:${server.address().port}`; const response = await fetch(`${base}/app`); const html = await response.text(); assert.equal(response.status, 200); assert.match(html, /id="settings-form"/); assert.match(html, /src="\/form-submit\.js"/); assert.match(html, /src="\/app-config\.js"/); const helper = await fetch(`${base}/form-submit.js`); assert.equal(helper.status, 200); assert.match(helper.headers.get('content-type'), /application\/javascript/); const config = await fetch(`${base}/app-config.js`); assert.equal(config.status, 200); assert.match(config.headers.get('content-type'), /application\/javascript/); } finally { server.close(); }
 });

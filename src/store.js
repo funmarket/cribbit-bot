@@ -22,8 +22,9 @@ function createStore(dataFile) {
   }
   function list(bucket, chatId) { state[bucket][chatId] ||= []; return state[bucket][chatId]; }
   function settings(chatId, houseName) { state.settings[chatId] ||= defaultSettings(houseName); state.settings[chatId].defaultLocale = normalizeLocale(state.settings[chatId].defaultLocale); return state.settings[chatId]; }
+  function userPreference(telegramId) { const key = String(telegramId); state.userPreferences[key] ||= {}; return state.userPreferences[key]; }
   function userLocale(telegramId) { return state.userPreferences[String(telegramId)]?.locale || null; }
-  function setUserLocale(telegramId, locale) { const key = String(telegramId); state.userPreferences[key] ||= {}; state.userPreferences[key].locale = normalizeLocale(locale); state.userPreferences[key].updatedAt = now(); save(); return state.userPreferences[key].locale; }
+  function setUserLocale(telegramId, locale) { const preference = userPreference(telegramId); preference.locale = normalizeLocale(locale); preference.updatedAt = now(); save(); return preference.locale; }
   function resolveLocale(chatId, telegramUser, options = {}) { const saved = userLocale(telegramUser?.id); const telegramLocale = telegramUser?.language_code ? normalizeLocale(telegramUser.language_code) : null; const houseLocale = settings(chatId).defaultLocale; return options.groupMessage ? houseLocale : saved || telegramLocale || houseLocale || 'en'; }
   function addActivity(chatId, type, message, actor, metadata = {}) {
     const event = { id: makeId('a'), type, message, actor: cleanName(actor), metadata, createdAt: now() };
@@ -58,6 +59,23 @@ function createStore(dataFile) {
         return { chatId, houseName: houseSettings.houseName || 'My Crib', role: member.role || 'member' };
       })
       .sort((a, b) => a.houseName.localeCompare(b.houseName));
+  }
+  function activeChatId(telegramId) {
+    const preference = state.userPreferences[String(telegramId)];
+    if (!preference?.activeChatId) return null;
+    const chatId = String(preference.activeChatId);
+    if (housesForTelegramId(telegramId).some((house) => house.chatId === chatId)) return chatId;
+    delete preference.activeChatId; preference.updatedAt = now(); save(); return null;
+  }
+  function setActiveChatId(telegramId, chatId) {
+    const normalizedChatId = String(chatId || '');
+    if (!housesForTelegramId(telegramId).some((house) => house.chatId === normalizedChatId)) throw Object.assign(new Error('You are not an active member of this crib.'), { statusCode: 403 });
+    const preference = userPreference(telegramId); preference.activeChatId = normalizedChatId; preference.updatedAt = now(); save(); return normalizedChatId;
+  }
+  function clearActiveChatId(telegramId) {
+    const preference = state.userPreferences[String(telegramId)];
+    if (!preference?.activeChatId) return false;
+    delete preference.activeChatId; preference.updatedAt = now(); save(); return true;
   }
   function memberNames(chatId) { return uniqueNames([...(state.members[chatId] || []), ...list('memberProfiles', chatId).filter((m) => m.active).map((m) => m.displayName)]); }
   function addExpense(chatId, details, actor, source = 'telegram') {
@@ -108,7 +126,7 @@ function createStore(dataFile) {
   }
   function markUpdate(updateId) { if (updateId == null) return true; if (state.processedUpdates[updateId]) return false; state.processedUpdates[updateId] = now(); const ids = Object.keys(state.processedUpdates); if (ids.length > 1000) ids.slice(0, ids.length - 1000).forEach((id) => delete state.processedUpdates[id]); save(); return true; }
   function clear(chatId) { for (const key of ['expenses', 'chores', 'members', 'memberProfiles', 'groceries', 'activity', 'settings']) state[key][chatId] = key === 'settings' ? defaultSettings() : []; save(); }
-  return { state, save, registerMember, isMember, memberByTelegramId, housesForTelegramId, memberNames, addExpense, addChore, findChore, updateChore, deleteChore, addGrocery, updateGrocery, deleteGrocery, updateSettings, dashboard, addActivity, markUpdate, clear, settings, userLocale, setUserLocale, resolveLocale };
+  return { state, save, registerMember, isMember, memberByTelegramId, housesForTelegramId, activeChatId, setActiveChatId, clearActiveChatId, memberNames, addExpense, addChore, findChore, updateChore, deleteChore, addGrocery, updateGrocery, deleteGrocery, updateSettings, dashboard, addActivity, markUpdate, clear, settings, userLocale, setUserLocale, resolveLocale };
 }
 
 module.exports = { createStore, defaultSettings };

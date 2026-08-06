@@ -3,21 +3,26 @@ const http = require('http');
 const path = require('path');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
-const STATIC_FILES = { '/': ['index.html', 'text/html; charset=utf-8'], '/dashboard': ['app.html', 'text/html; charset=utf-8'], '/app': ['app.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'application/javascript; charset=utf-8'], '/form-submit.js': ['form-submit.js', 'application/javascript; charset=utf-8'], '/i18n.js': ['i18n.js', 'application/javascript; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8'], '/logo.png': ['logo.png', 'image/png'], '/locales/en.json': ['locales/en.json', 'application/json; charset=utf-8'], '/locales/fr.json': ['locales/fr.json', 'application/json; charset=utf-8'], '/locales/ar.json': ['locales/ar.json', 'application/json; charset=utf-8'] };
+const STATIC_FILES = { '/': ['index.html', 'text/html; charset=utf-8'], '/dashboard': ['app.html', 'text/html; charset=utf-8'], '/app': ['app.html', 'text/html; charset=utf-8'], '/app.js': ['app.js', 'application/javascript; charset=utf-8'], '/app-config.js': ['app-config.js', 'application/javascript; charset=utf-8'], '/form-submit.js': ['form-submit.js', 'application/javascript; charset=utf-8'], '/i18n.js': ['i18n.js', 'application/javascript; charset=utf-8'], '/styles.css': ['styles.css', 'text/css; charset=utf-8'], '/logo.png': ['logo.png', 'image/png'], '/locales/en.json': ['locales/en.json', 'application/json; charset=utf-8'], '/locales/fr.json': ['locales/fr.json', 'application/json; charset=utf-8'], '/locales/ar.json': ['locales/ar.json', 'application/json; charset=utf-8'] };
 const jsonHeaders = (cors) => ({ ...cors, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
 const sendJson = (res, status, body, cors = {}) => { res.writeHead(status, jsonHeaders(cors)); res.end(JSON.stringify(body)); };
 function readJson(req) { return new Promise((resolve, reject) => { let body = ''; req.on('data', (chunk) => { body += chunk; if (body.length > 65536) reject(Object.assign(new Error('Request is too large.'), { statusCode: 413 })); }); req.on('end', () => { try { resolve(body ? JSON.parse(body) : {}); } catch { reject(Object.assign(new Error('Request body must be valid JSON.'), { statusCode: 400 })); } }); req.on('error', reject); }); }
 
-function startDashboardServer({ getDashboard, listHouses, performAction, authenticate, port, allowedOrigin }) {
+function startDashboardServer({ getDashboard, listHouses, setActiveHouse, performAction, authenticate, port, allowedOrigin }) {
   const normalizedOrigin = allowedOrigin ? allowedOrigin.replace(/\/$/, '') : null;
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`); const origin = req.headers.origin; const cors = normalizedOrigin && origin === normalizedOrigin ? { 'Access-Control-Allow-Origin': normalizedOrigin, Vary: 'Origin' } : {};
-    if (req.method === 'OPTIONS') { res.writeHead(204, { ...cors, 'Access-Control-Allow-Headers': 'Content-Type, X-Telegram-Init-Data', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' }); return res.end(); }
+    if (req.method === 'OPTIONS') { res.writeHead(204, { ...cors, 'Access-Control-Allow-Headers': 'Content-Type, X-Telegram-Init-Data', 'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS' }); return res.end(); }
     if (url.pathname === '/health') return sendJson(res, 200, { status: 'ok' });
     try {
       if (url.pathname === '/api/houses' && req.method === 'GET') {
         if (!listHouses) throw Object.assign(new Error('House discovery is not configured.'), { statusCode: 503 });
         const result = await listHouses(req.headers['x-telegram-init-data']); return sendJson(res, 200, result, cors);
+      }
+      if (url.pathname === '/api/preferences/active-crib' && req.method === 'PUT') {
+        if (!setActiveHouse) throw Object.assign(new Error('Active Crib preferences are not configured.'), { statusCode: 503 });
+        const body = await readJson(req); if (!body.chatId) throw Object.assign(new Error('chatId is required.'), { statusCode: 400 });
+        const result = await setActiveHouse(req.headers['x-telegram-init-data'], String(body.chatId)); return sendJson(res, 200, result, cors);
       }
       if (url.pathname === '/api/dashboard' && req.method === 'GET') {
         const chatId = url.searchParams.get('chatId'); if (!chatId) throw Object.assign(new Error('chatId is required.'), { statusCode: 400 });

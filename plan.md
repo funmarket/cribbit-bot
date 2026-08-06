@@ -52,7 +52,7 @@ Application work must begin from a freshly recorded Git status and commit. At th
 
 - Telegram privacy mode is enabled. Ordinary natural-language group messages may not be delivered unless Cribbit is an administrator, privacy mode is disabled, or users explicitly address/reply to the bot.
 - Expense and chore submit handlers use `event.currentTarget` after `await`; it becomes `null`, reset throws, and the modal stays open after a successful save.
-- Multiple-Crib discovery exists, but the active Crib is stored only in memory/current URL. The visible Crib selector and Settings do not provide persistent switching.
+- Multiple-Crib persistence and switching are implemented and browser-verified locally; production publication and live Telegram verification are still pending.
 - Telegram Main Mini App, blue menu button, `/dashboard`, `/app`, and `/dashboard` alias must all be verified as consistent launch paths.
 
 ### P2 — Required product/security work
@@ -215,7 +215,7 @@ Status: **Pending after Phase 2**
 
 ## Phase 5 — Implement persistent Crib selection and switching
 
-Status: **Pending after Phase 4**
+Status: **Implemented and verified locally; not yet published or production-verified**
 
 ### Data and authorization design
 
@@ -226,15 +226,15 @@ Status: **Pending after Phase 4**
 
 ### Tasks
 
-- [ ] Add store methods to get, validate, set, and clear the active Crib.
-- [ ] Add authenticated API operations for reading and updating the active Crib.
-- [ ] Make the desktop sidebar Crib card interactive.
-- [ ] Add an equivalent mobile Crib switcher.
-- [ ] Add “Switch Crib” to Settings.
-- [ ] Reuse `/api/houses`; do not build a second membership list.
-- [ ] Synchronize the current URL after a switch without trusting it for access.
-- [ ] Refresh Overview, Expenses, Chores, Groceries, Roomies, Activity, and Settings after switching.
-- [ ] Test users with zero, one, multiple, removed, and inactive memberships.
+- [x] Add store methods to get, validate, set, and clear the active Crib.
+- [x] Add authenticated API operations for reading and updating the active Crib.
+- [x] Make the desktop sidebar Crib card interactive.
+- [x] Add an equivalent mobile Crib switcher.
+- [x] Add “Switch Crib” to Settings.
+- [x] Reuse `/api/houses`; do not build a second membership list.
+- [x] Synchronize the current URL after a switch without trusting it for access.
+- [x] Refresh Overview, Expenses, Chores, Groceries, Roomies, Activity, and Settings after switching.
+- [x] Test users with zero, one, multiple, removed, and inactive memberships.
 
 ### Exit criteria
 

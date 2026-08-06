@@ -89,8 +89,9 @@ Telegram may append `@Cribbit_bot` in groups; handlers must remain compatible.
 
 1. `/dashboard` returns `/app?chatId=<group>&apiBaseUrl=<railway-origin>`.
 2. The global blue **Cribbit** button opens `/app?apiBaseUrl=<railway-origin>`.
+3. The BotFather Main App may use the simple canonical URL `/app`; Vercel proxies `/api/*` to Railway and the frontend safely falls back to its current origin when an `apiBaseUrl` override is absent or malformed.
 
-Without `chatId`, signed Telegram identity is used with `/api/houses`: zero houses show onboarding, one opens automatically, and multiple houses show a selector. Outside Telegram, real data stays behind the authentication gate. `?demo=1` is explicitly non-persistent.
+Without `chatId`, signed Telegram identity is used with `/api/houses`: zero houses show onboarding, one opens automatically, and multiple houses show a selector. The selected active Crib is stored as a user preference, revalidated against active membership on every launch, and can be switched from the desktop sidebar, mobile header, or Settings. Outside Telegram, real data stays behind the authentication gate. `?demo=1` is explicitly non-persistent.
 
 ## Requirements and installation
 
@@ -162,6 +163,7 @@ git diff --check
 | --- | --- | --- |
 | `GET` | `/health` | Public liveness |
 | `GET` | `/api/houses` | Authenticated house discovery |
+| `PUT` | `/api/preferences/active-crib` | Persist an authenticated, membership-authorized active Crib |
 | `GET` | `/api/dashboard?chatId=…` | Authenticated/member-authorized dashboard |
 | `POST` | `/api/action` | Authenticated/member-authorized allow-listed mutation |
 
