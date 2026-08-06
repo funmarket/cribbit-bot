@@ -51,7 +51,7 @@ Application work must begin from a freshly recorded Git status and commit. At th
 ### P1 — High
 
 - Telegram privacy mode is enabled. Ordinary natural-language group messages may not be delivered unless Cribbit is an administrator, privacy mode is disabled, or users explicitly address/reply to the bot.
-- Telegram command definitions drifted: BotFather/default commands were manually updated to the full product list, but `src/bot-commands.js` and Telegram language-specific scopes (`en`, `fr`, `ar`) still used the old shorter list.
+- Telegram command definitions drifted: BotFather/default commands were manually updated to the full product list, but `src/bot-commands.js` and Telegram language-specific scopes (`en`, `fr`, `ar`) still used the old shorter list. Fixed by command menu synchronization hotfix, but GitHub branch protection still allowed merge while the Actions check had not completed cleanly.
 - Expense and chore submit handlers use `event.currentTarget` after `await`; it becomes `null`, reset throws, and the modal stays open after a successful save.
 - Multiple-Crib persistence and switching are implemented and browser-verified locally; production publication and live Telegram verification are still pending.
 - Telegram Main Mini App, blue menu button, `/dashboard`, `/app`, and `/dashboard` alias must all be verified as consistent launch paths.
@@ -124,7 +124,7 @@ Status: **Pending after Phase 0**
 
 ## Command menu synchronization hotfix
 
-Status: **Tested locally; publish pending**
+Status: **End-to-end verified; CI/branch-protection follow-up required**
 
 ### Root cause
 
@@ -137,9 +137,22 @@ Telegram can return different slash-command menus by command scope and language 
 - [x] Update `/help` text in bot and public locale files so it does not contradict the command menu.
 - [x] Add a regression test proving default and localized command lists stay identical.
 - [x] Run local verification.
-- [ ] Commit and merge the fix from the local source of truth.
-- [ ] Let Railway deploy the same Git commit.
-- [ ] Verify Telegram `getMyCommands` for default, `en`, `fr`, and `ar` all return the same full list.
+- [x] Commit and merge the fix from the local source of truth.
+- [x] Let Railway deploy the same Git commit.
+- [x] Verify Telegram `getMyCommands` for default, `en`, `fr`, and `ar` all return the same full list.
+
+### Verification evidence
+
+- Local commit: `88a78db` on `agent/sync-command-menu`.
+- GitHub merge commit: `9c8ce95`.
+- PR: `#5`.
+- `npm run typecheck`: passed, 27/27 tests.
+- `npm run build`: passed.
+- `git diff --check`: passed.
+- Railway `/health`: `200`, `{ "status": "ok" }`.
+- Vercel `/app`: `200`.
+- Telegram `getMyCommands`: default, `en`, `fr`, and `ar` all return the same 36 commands.
+- GitHub Actions anomaly: `Verify Cribbit` job showed `Set up job` failure while the run remained `in_progress`; branch protection did not block the merge. Treat CI enforcement as a separate required follow-up before relying on GitHub as a gate.
 
 ### Exit criteria
 
