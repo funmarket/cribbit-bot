@@ -162,7 +162,7 @@ Telegram can return different slash-command menus by command scope and language 
 
 ## Advertised command handler hotfix
 
-Status: **Tested locally; publish pending**
+Status: **Merged to GitHub main; Railway live command verification pending**
 
 ### Root cause
 
@@ -175,14 +175,20 @@ The 36-command Telegram menu was synchronized before every command had a matchin
 - [x] Add a regression test proving every command in `BOT_COMMANDS` has a registered handler.
 - [x] Add persistence tests for the new feature buckets.
 - [x] Run local verification.
-- [ ] Commit and merge the fix from the local source of truth.
-- [ ] Let Railway deploy the same Git commit.
+- [x] Commit and merge the fix from the local source of truth.
+- [x] Let Railway deploy the same Git commit.
 - [ ] Verify live Telegram commands such as `/fundme`, `/funds`, `/corrections`, `/houserules`, `/party`, `/dinner`, and `/mood` no longer hit the unknown-command fallback.
 
 ### Verification evidence
 
 - `npm run typecheck`: passed, 29/29 tests.
 - `npm run build`: passed.
+- GitHub PR: `#7`.
+- GitHub merge commit: `6cd3b88`.
+- Vercel preview checks: passed.
+- Railway `/health`: `200`, `{ "status": "ok" }`.
+- Telegram command menu: 36 commands.
+- Railway deployed commit could not be read directly because Railway CLI/connector is unavailable in this session.
 
 ## Phase 2 — Fix Telegram group commands and dashboard launching
 
