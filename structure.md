@@ -87,7 +87,7 @@ The JSON store is partitioned by Telegram `chatId` and contains:
 - `activity`
 - `settings`
 - `processedUpdates`
-- `userPreferences`
+- `userPreferences` keyed by Telegram ID, containing personal `locale`, optional membership-validated `activeChatId`, and `updatedAt`
 
 Production data belongs on the Railway volume through `DATA_DIR` or `RAILWAY_VOLUME_MOUNT_PATH`. `expenses.json` is runtime data and must never be committed.
 
@@ -97,6 +97,7 @@ Production data belongs on the Railway volume through `DATA_DIR` or `RAILWAY_VOL
 | --- | --- | --- | --- |
 | `GET` | `/health` | Public | Liveness check |
 | `GET` | `/api/houses` | Valid Telegram `initData` | Find active group memberships |
+| `PUT` | `/api/preferences/active-crib` | Valid Telegram `initData` and active membership | Persist the active Crib preference |
 | `GET` | `/api/dashboard?chatId=…` | Valid `initData` and active membership | Load one house |
 | `POST` | `/api/action` | Valid `initData` and active membership | Run an allow-listed mutation |
 
@@ -106,7 +107,9 @@ Vercel `/app` is canonical. `/dashboard` is a compatibility alias that returns t
 
 - `/dashboard` produces a group-specific URL containing `chatId` and `apiBaseUrl`.
 - The global blue **Cribbit** button uses `/app?apiBaseUrl=…` without a group ID.
+- The BotFather Main App can use canonical `/app`; invalid or absent API overrides fall back to the current origin, and Vercel proxies `/api/*` to Railway.
 - Signed Telegram identity lets the Mini App discover zero, one, or multiple eligible houses.
+- The active Crib preference never grants access; discovery, loads, switches, and mutations continue to enforce active membership.
 
 ## Generated and quarantined files
 

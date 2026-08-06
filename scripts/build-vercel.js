@@ -7,7 +7,7 @@ const output = path.join(__dirname, '..', 'dist');
 fs.rmSync(output, { recursive: true, force: true });
 fs.cpSync(source, output, { recursive: true });
 
-for (const file of ['index.html', 'app.html', 'app.js', 'form-submit.js', 'i18n.js', 'styles.css', 'logo.png']) {
+for (const file of ['index.html', 'app.html', 'app.js', 'app-config.js', 'form-submit.js', 'i18n.js', 'styles.css', 'logo.png']) {
   if (!fs.existsSync(path.join(output, file))) throw new Error(`Vercel build is missing ${file}`);
 }
 

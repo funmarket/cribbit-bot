@@ -50,6 +50,7 @@ Cribbit is a shared-house Telegram bot with one responsive dashboard that works 
 - **WEB-013:** Telegram Mini App and external Web Login use the same `/app` frontend, Railway API, store, Telegram identity, membership checks, and mutations; no second database or divergent dashboard is permitted.
 - **WEB-014:** External Web Login uses Telegram's current official BotFather Web Login/OpenID Connect flow with registered origins and redirect URIs.
 - **WEB-015:** Users can log out, and expired, revoked, invalid, replayed, or unauthorized web sessions fail without exposing house data.
+- **WEB-016:** An authenticated user can persist and switch an active Crib from desktop navigation, mobile navigation, and Settings; the preference never replaces active-membership authorization and is cleared when membership is removed or inactive.
 
 ### Data and calculations
 

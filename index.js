@@ -84,9 +84,11 @@ async function listHouses(initData) {
   const user = validateTelegramInitData(initData, process.env.BOT_TOKEN);
   return {
     viewer: { telegramId: String(user.id), displayName: cleanName(user.first_name || user.username || String(user.id)), locale: store.userLocale(user.id) || normalizeLocale(user.language_code) },
-    houses: store.housesForTelegramId(user.id)
+    houses: store.housesForTelegramId(user.id),
+    activeChatId: store.activeChatId(user.id)
   };
 }
+async function setActiveHouse(initData, chatId) { const viewer = await authenticate(initData, chatId); return { activeChatId: store.setActiveChatId(viewer.telegramId, chatId) }; }
 async function performAction(chatId, action, payload, viewer) {
   const actor = viewer.displayName;
   if (action === 'expense.add') return store.addExpense(chatId, { amount: Number(payload.amount), description: payload.description, paidBy: payload.paidBy || actor, participants: payload.participants || store.memberNames(chatId), category: payload.category, notes: payload.notes }, actor, 'app');
@@ -99,7 +101,7 @@ async function performAction(chatId, action, payload, viewer) {
   throw Object.assign(new Error('Unsupported dashboard action.'), { statusCode: 400 });
 }
 
-const dashboardServer = startDashboardServer({ getDashboard: (chatId, viewer) => store.dashboard(chatId, viewer), listHouses, performAction, authenticate, port: PORT, allowedOrigin: miniAppOrigin(process.env) });
+const dashboardServer = startDashboardServer({ getDashboard: (chatId, viewer) => store.dashboard(chatId, viewer), listHouses, setActiveHouse, performAction, authenticate, port: PORT, allowedOrigin: miniAppOrigin(process.env) });
 async function syncMenuButton() {
   try {
     const url = menuAppUrl(process.env);
