@@ -4,13 +4,14 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { Telegraf } = require('telegraf');
 const { parseNaturalExpense, normalizeDigits, parseLocalizedAmount } = require('../src/expenses');
 const { calculateBalances, simplifyDebts } = require('../src/balances');
 const { parseChoreInput } = require('../src/chores');
 const { createStore } = require('../src/store');
 const { validateTelegramInitData } = require('../src/telegram-auth');
 const { startDashboardServer } = require('../src/dashboard-server');
-const { dashboardUrl, menuAppUrl } = require('../src/dashboard-links');
+const { dashboardUrl, menuAppUrl, mainAppUrl, dashboardReplyMarkup } = require('../src/dashboard-links');
 const { BOT_COMMANDS, commandsForLocale } = require('../src/bot-commands');
 const { normalizeLocale, translate, missingTranslationKeys } = require('../src/i18n');
 
@@ -53,6 +54,27 @@ test('builds canonical inline and global menu Mini App URLs', () => {
   const env = { MINI_APP_URL: 'https://cribbit-dashboard-sigma.vercel.app/app', RAILWAY_PUBLIC_DOMAIN: 'cribbit-production.up.railway.app' };
   assert.equal(dashboardUrl(env, -1001), 'https://cribbit-dashboard-sigma.vercel.app/app?chatId=-1001&apiBaseUrl=https%3A%2F%2Fcribbit-production.up.railway.app');
   assert.equal(menuAppUrl(env), 'https://cribbit-dashboard-sigma.vercel.app/app?apiBaseUrl=https%3A%2F%2Fcribbit-production.up.railway.app');
+});
+
+test('uses private Web App buttons only in private chats and group-safe Main App links in groups', () => {
+  const env = { MINI_APP_URL: 'https://cribbit-dashboard-sigma.vercel.app', RAILWAY_PUBLIC_DOMAIN: 'cribbit-production.up.railway.app' };
+  const privateMarkup = dashboardReplyMarkup(env, { chatId: 42, chatType: 'private', botUsername: 'Cribbit_bot', view: 'expenses', text: 'Open Cribbit' });
+  assert.deepEqual(privateMarkup, { inline_keyboard: [[{ text: 'Open Cribbit', web_app: { url: 'https://cribbit-dashboard-sigma.vercel.app/app?chatId=42&view=expenses&apiBaseUrl=https%3A%2F%2Fcribbit-production.up.railway.app' } }]] });
+
+  const groupMarkup = dashboardReplyMarkup(env, { chatId: -1001, chatType: 'supergroup', botUsername: '@Cribbit_bot', view: 'chores', text: 'Open Cribbit' });
+  assert.deepEqual(groupMarkup, { inline_keyboard: [[{ text: 'Open Cribbit', url: 'https://t.me/Cribbit_bot?startapp' }]] });
+  assert.equal('web_app' in groupMarkup.inline_keyboard[0][0], false);
+  assert.equal(mainAppUrl('@Cribbit_bot'), 'https://t.me/Cribbit_bot?startapp');
+});
+
+test('Telegraf routes commands addressed with the bot username in groups', async () => {
+  const bot = new Telegraf('123456:test-token');
+  bot.botInfo = { id: 123456, is_bot: true, first_name: 'Cribbit', username: 'Cribbit_bot' };
+  let handled = false;
+  bot.command('start', (ctx) => { handled = ctx.chat.type === 'supergroup'; });
+  const text = '/start@Cribbit_bot';
+  await bot.handleUpdate({ update_id: 1, message: { message_id: 1, date: 1, text, entities: [{ offset: 0, length: text.length, type: 'bot_command' }], from: { id: 7, is_bot: false, first_name: 'Alex' }, chat: { id: -1001, type: 'supergroup', title: 'Test Crib' } } });
+  assert.equal(handled, true);
 });
 
 test('deduplicates Telegram update identifiers', (t) => {
@@ -133,7 +155,37 @@ test('Mini App localization applies Arabic RTL and keeps the logo unmirrored', (
   assert.match(script, /documentElement\.dir = locale === 'ar' \? 'rtl' : 'ltr'/); assert.match(css, /\[dir="rtl"\] \.app-logo,\[dir="rtl"\] img\{transform:none\}/);
 });
 
-test('dashboard route opens the Mini App document', async () => {
+test('form submissions close only after success and block duplicate requests', async () => {
+  const { runFormSubmission } = require('../public/form-submit');
+  const attributes = new Map();
+  const form = { resetCount: 0, reset() { this.resetCount += 1; }, setAttribute(name, value) { attributes.set(name, value); }, removeAttribute(name) { attributes.delete(name); } };
+  const dialog = { closeCount: 0, close() { this.closeCount += 1; } };
+  const submitButton = { disabled: false, setAttribute(name, value) { attributes.set(`button:${name}`, value); }, removeAttribute(name) { attributes.delete(`button:${name}`); } };
+
+  let release;
+  let saveCount = 0;
+  const pending = runFormSubmission({ form, dialog, submitButton, save: () => { saveCount += 1; return new Promise((resolve) => { release = resolve; }); } });
+  assert.equal(submitButton.disabled, true);
+  assert.equal(attributes.get('aria-busy'), 'true');
+  assert.equal(await runFormSubmission({ form, dialog, submitButton, save: async () => { saveCount += 1; } }), false);
+  assert.equal(saveCount, 1);
+  release();
+  assert.equal(await pending, true);
+  assert.equal(form.resetCount, 1);
+  assert.equal(dialog.closeCount, 1);
+  assert.equal(submitButton.disabled, false);
+  assert.equal(attributes.has('aria-busy'), false);
+
+  const failure = new Error('save failed');
+  let reported;
+  assert.equal(await runFormSubmission({ form, dialog, submitButton, save: async () => { throw failure; }, onError: (error) => { reported = error; } }), false);
+  assert.equal(reported, failure);
+  assert.equal(form.resetCount, 1);
+  assert.equal(dialog.closeCount, 1);
+  assert.equal(submitButton.disabled, false);
+});
+
+test('dashboard route opens the Mini App document with required form assets', async () => {
   const server = startDashboardServer({ getDashboard: () => ({}), performAction: () => ({}), authenticate: () => ({}), port: 0 }); await new Promise((resolve) => server.once('listening', resolve));
-  try { const response = await fetch(`http://127.0.0.1:${server.address().port}/app`); const html = await response.text(); assert.equal(response.status, 200); assert.match(html, /id="settings-form"/); } finally { server.close(); }
+  try { const base = `http://127.0.0.1:${server.address().port}`; const response = await fetch(`${base}/app`); const html = await response.text(); assert.equal(response.status, 200); assert.match(html, /id="settings-form"/); assert.match(html, /src="\/form-submit\.js"/); const helper = await fetch(`${base}/form-submit.js`); assert.equal(helper.status, 200); assert.match(helper.headers.get('content-type'), /application\/javascript/); } finally { server.close(); }
 });
