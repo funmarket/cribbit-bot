@@ -292,7 +292,7 @@ Exit criteria:
 
 ### Phase 1 — Mode model and source module
 
-Status: implemented and tested locally through Slice C; publish pending
+Status: complete through Slice C
 
 Tasks:
 
@@ -642,10 +642,15 @@ Slice C evidence:
 ```text
 Slice: C — Persist settings.cribMode
 Starting commit: 2845329
+Local commit: 2422523
+PR: #12
+Merge commit: 9dc0d64
 Files changed locally: src/store.js, test/cribbit.test.js, modeplan.md
-npm run typecheck: passed, 31/31 tests
-npm run build: passed
+npm run typecheck: passed, 31/31 tests before PR and after merge
+npm run build: passed before PR and after merge
 git diff --check: passed with LF-to-CRLF warnings only
+Vercel: PR preview checks passed; production /app returned 200 after merge
+Railway: /health returned ok after merge
 Runtime behavior changed: settings now persist normalized cribMode per Crib
 Command menu changed: no
 Known repair included: restored registerMember profile creation from a dirty partial local edit before continuing
