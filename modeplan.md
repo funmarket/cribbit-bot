@@ -275,15 +275,15 @@ Overview cards:
 
 ### Phase 0 — Baseline and safety
 
-Status: pending
+Status: complete for Slice B start
 
 Tasks:
 
-- [ ] Record branch, commit SHA, and `git status --short --branch`.
-- [ ] Confirm only `C:\Users\GrowB\cribbit-bot` is edited.
-- [ ] Confirm the old extensionless `index` remains untouched and untracked.
-- [ ] Read current `index.js`, `src/store.js`, `src/bot-commands.js`, dashboard settings code, locale files, tests, and `plan.md`.
-- [ ] Decide whether `/mode` should be added to the Telegram command menu immediately or hidden until dashboard support exists.
+- [x] Record branch, commit SHA, and `git status --short --branch`.
+- [x] Confirm only `C:\Users\GrowB\cribbit-bot` is edited.
+- [x] Confirm the old extensionless `index` remains untouched and untracked.
+- [x] Read current `index.js`, `src/store.js`, `src/bot-commands.js`, dashboard settings code, locale files, tests, and `plan.md`.
+- [x] Decide whether `/mode` should be added to the Telegram command menu immediately or hidden until dashboard support exists.
 
 Exit criteria:
 
@@ -292,27 +292,29 @@ Exit criteria:
 
 ### Phase 1 — Mode model and source module
 
-Status: pending
+Status: implemented and tested locally; publish pending
 
 Tasks:
 
-- [ ] Add `src/modes.js`.
-- [ ] Define mode keys, display names, descriptions, tone labels, primary commands, dashboard cards, and aliases.
+- [x] Add `src/modes.js`.
+- [x] Define mode keys, display names, descriptions, tone labels, primary commands, dashboard cards, and aliases.
 - [ ] Add `cribMode: "roomies"` to default settings.
-- [ ] Normalize invalid/missing modes back to `roomies`.
-- [ ] Export helpers such as:
+- [x] Normalize invalid/missing modes back to `roomies`.
+- [x] Export helpers such as:
   - `normalizeMode(value)`;
   - `modeDefinition(value)`;
   - `commandsForMode(value)`;
   - `modeNames()`;
   - `isPrimaryModeCommand(mode, command)`.
-- [ ] Add tests for mode normalization and definitions.
+- [x] Add tests for mode normalization and definitions.
 
 Exit criteria:
 
 - Mode definitions are centralized.
 - Store settings persist a valid mode.
 - Invalid mode data cannot crash the bot or dashboard.
+
+Slice B note: `cribMode` persistence remains intentionally unchecked here because `modeplan.md` assigns it to Slice C.
 
 ### Phase 2 — `/mode` Telegram command
 
@@ -518,12 +520,12 @@ npm run build
 
 Checklist:
 
-- [ ] Confirm branch is `main...origin/main`.
-- [ ] Confirm only the old extensionless `index` is untracked.
-- [ ] Confirm no source file is modified before implementation starts.
-- [ ] Record current commit SHA in this file under the active slice notes.
-- [ ] Run `npm run typecheck`.
-- [ ] Run `npm run build`.
+- [x] Confirm branch is `main...origin/main`.
+- [x] Confirm only the old extensionless `index` is untracked.
+- [x] Confirm no source file is modified before implementation starts.
+- [x] Record current commit SHA in this file under the active slice notes.
+- [x] Run `npm run typecheck`.
+- [x] Run `npm run build`.
 
 Stop if:
 
@@ -582,6 +584,18 @@ Exit criteria:
 - `src\modes.js` exists.
 - Tests pass.
 - No runtime behavior changes yet.
+
+Slice B evidence:
+
+```text
+Slice: B — Central mode definitions
+Starting commit: 1fee9ba
+Files changed locally: src/modes.js, test/cribbit.test.js, modeplan.md
+npm run typecheck: passed, 30/30 tests
+npm run build: passed
+Runtime behavior changed: no
+Command menu changed: no
+```
 
 ### Slice C — Persist `settings.cribMode`
 
