@@ -3,7 +3,7 @@ const query = new URLSearchParams(location.search); let chatId = query.get('chat
 const $ = (selector) => document.querySelector(selector); const $$ = (selector) => [...document.querySelectorAll(selector)];
 const escapeHtml = (value) => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 let data = null; let currentView = query.get('view') || location.hash.slice(1) || 'overview';
-const i18n = window.CribbitI18n; const t = (key, variables) => i18n.t(key, variables);
+const i18n = window.CribbitI18n; const forms = window.CribbitForms; const t = (key, variables) => i18n.t(key, variables);
 async function apiFetch(url,options={}){const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),10000);try{return await fetch(url,{...options,signal:controller.signal});}catch(error){if(error.name==='AbortError')throw new Error('Cribbit took too long to respond. Please try again.');throw error;}finally{clearTimeout(timeout);}}
 
 const demoData = {
@@ -63,9 +63,10 @@ function bindDynamicActions(){ $$('[data-chore-toggle]').forEach(button=>button.
 $$('[data-view]').forEach(button=>button.addEventListener('click',()=>{showView(button.dataset.view);const focus=button.dataset.focus;if(focus)setTimeout(()=>document.getElementById(focus)?.focus(),80)}));$('#more-button').addEventListener('click',()=>$('#more-menu').hidden=!$('#more-menu').hidden);$('#mobile-more').addEventListener('click',()=>$('#more-menu').hidden=!$('#more-menu').hidden);
 $$('[data-modal]').forEach(button=>button.addEventListener('click',()=>document.getElementById(button.dataset.modal).showModal()));$$('[data-close]').forEach(button=>button.addEventListener('click',()=>button.closest('dialog').close()));
 $('#expense-search').addEventListener('input',()=>data&&renderExpenses(filterExpenses(),$('#expense-list')));$('#expense-sort').addEventListener('change',()=>data&&renderExpenses(filterExpenses(),$('#expense-list')));
-$('#expense-form').addEventListener('submit',async event=>{event.preventDefault();const form=new FormData(event.currentTarget);try{await apiAction('expense.add',Object.fromEntries(form));event.currentTarget.reset();$('#expense-modal').close();}catch(error){toast(error.message,true)}});
-$('#chore-form').addEventListener('submit',async event=>{event.preventDefault();const form=new FormData(event.currentTarget);try{await apiAction('chore.add',Object.fromEntries(form));event.currentTarget.reset();$('#chore-modal').close();}catch(error){toast(error.message,true)}});
-$('#grocery-form').addEventListener('submit',async event=>{event.preventDefault();const form=new FormData(event.currentTarget);try{await apiAction('grocery.add',Object.fromEntries(form));event.currentTarget.reset();}catch(error){toast(error.message,true)}});
+function submitForm(event,action,dialog){event.preventDefault();const form=event.currentTarget;const payload=Object.fromEntries(new FormData(form));return forms.runFormSubmission({form,dialog,submitButton:form.querySelector('[type="submit"]'),save:()=>apiAction(action,payload),onError:error=>toast(error.message,true)});}
+$('#expense-form').addEventListener('submit',event=>submitForm(event,'expense.add',$('#expense-modal')));
+$('#chore-form').addEventListener('submit',event=>submitForm(event,'chore.add',$('#chore-modal')));
+$('#grocery-form').addEventListener('submit',event=>submitForm(event,'grocery.add'));
 $('#locale-select').addEventListener('change',async event=>{const locale=i18n.normalize(event.target.value);await i18n.load(locale);if(demoMode){demoAction('locale.update',{locale});render();return;}try{await apiAction('locale.update',{locale})}catch(error){toast(error.message,true)}});
 $('#settings-form').addEventListener('submit',async event=>{event.preventDefault();const form=new FormData(event.currentTarget);const payload=Object.fromEntries(form);delete payload.locale;if(!['owner','admin'].includes(data.viewer?.role))delete payload.defaultLocale;payload.notifications=event.currentTarget.elements.notifications.checked;payload.weeklyDigest=event.currentTarget.elements.weeklyDigest.checked;try{await apiAction('settings.update',payload)}catch(error){toast(error.message,true)}});
 

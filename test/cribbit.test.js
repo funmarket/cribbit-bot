@@ -155,7 +155,37 @@ test('Mini App localization applies Arabic RTL and keeps the logo unmirrored', (
   assert.match(script, /documentElement\.dir = locale === 'ar' \? 'rtl' : 'ltr'/); assert.match(css, /\[dir="rtl"\] \.app-logo,\[dir="rtl"\] img\{transform:none\}/);
 });
 
-test('dashboard route opens the Mini App document', async () => {
+test('form submissions close only after success and block duplicate requests', async () => {
+  const { runFormSubmission } = require('../public/form-submit');
+  const attributes = new Map();
+  const form = { resetCount: 0, reset() { this.resetCount += 1; }, setAttribute(name, value) { attributes.set(name, value); }, removeAttribute(name) { attributes.delete(name); } };
+  const dialog = { closeCount: 0, close() { this.closeCount += 1; } };
+  const submitButton = { disabled: false, setAttribute(name, value) { attributes.set(`button:${name}`, value); }, removeAttribute(name) { attributes.delete(`button:${name}`); } };
+
+  let release;
+  let saveCount = 0;
+  const pending = runFormSubmission({ form, dialog, submitButton, save: () => { saveCount += 1; return new Promise((resolve) => { release = resolve; }); } });
+  assert.equal(submitButton.disabled, true);
+  assert.equal(attributes.get('aria-busy'), 'true');
+  assert.equal(await runFormSubmission({ form, dialog, submitButton, save: async () => { saveCount += 1; } }), false);
+  assert.equal(saveCount, 1);
+  release();
+  assert.equal(await pending, true);
+  assert.equal(form.resetCount, 1);
+  assert.equal(dialog.closeCount, 1);
+  assert.equal(submitButton.disabled, false);
+  assert.equal(attributes.has('aria-busy'), false);
+
+  const failure = new Error('save failed');
+  let reported;
+  assert.equal(await runFormSubmission({ form, dialog, submitButton, save: async () => { throw failure; }, onError: (error) => { reported = error; } }), false);
+  assert.equal(reported, failure);
+  assert.equal(form.resetCount, 1);
+  assert.equal(dialog.closeCount, 1);
+  assert.equal(submitButton.disabled, false);
+});
+
+test('dashboard route opens the Mini App document with required form assets', async () => {
   const server = startDashboardServer({ getDashboard: () => ({}), performAction: () => ({}), authenticate: () => ({}), port: 0 }); await new Promise((resolve) => server.once('listening', resolve));
-  try { const response = await fetch(`http://127.0.0.1:${server.address().port}/app`); const html = await response.text(); assert.equal(response.status, 200); assert.match(html, /id="settings-form"/); } finally { server.close(); }
+  try { const base = `http://127.0.0.1:${server.address().port}`; const response = await fetch(`${base}/app`); const html = await response.text(); assert.equal(response.status, 200); assert.match(html, /id="settings-form"/); assert.match(html, /src="\/form-submit\.js"/); const helper = await fetch(`${base}/form-submit.js`); assert.equal(helper.status, 200); assert.match(helper.headers.get('content-type'), /application\/javascript/); } finally { server.close(); }
 });

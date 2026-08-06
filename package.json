@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "build": "node scripts/build-vercel.js",
-    "typecheck": "node --check index.js && node --check src/expenses.js && node --check src/balances.js && node --check src/chores.js && node --check src/dashboard-server.js && node --check public/app.js && node --test",
+    "typecheck": "node --check index.js && node --check src/expenses.js && node --check src/balances.js && node --check src/chores.js && node --check src/dashboard-server.js && node --check public/form-submit.js && node --check public/app.js && node --test",
     "test": "node --test"
   },
   "engines": {
