@@ -52,6 +52,7 @@ Application work must begin from a freshly recorded Git status and commit. At th
 
 - Telegram privacy mode is enabled. Ordinary natural-language group messages may not be delivered unless Cribbit is an administrator, privacy mode is disabled, or users explicitly address/reply to the bot.
 - Telegram command definitions drifted: BotFather/default commands were manually updated to the full product list, but `src/bot-commands.js` and Telegram language-specific scopes (`en`, `fr`, `ar`) still used the old shorter list. Fixed by command menu synchronization hotfix, but GitHub branch protection still allowed merge while the Actions check had not completed cleanly.
+- Telegram command handlers drifted: the full slash menu was synchronized before every advertised command had an `index.js` handler, so commands such as `/fundme` appeared but fell through to the unknown-command response.
 - Expense and chore submit handlers use `event.currentTarget` after `await`; it becomes `null`, reset throws, and the modal stays open after a successful save.
 - Multiple-Crib persistence and switching are implemented and browser-verified locally; production publication and live Telegram verification are still pending.
 - Telegram Main Mini App, blue menu button, `/dashboard`, `/app`, and `/dashboard` alias must all be verified as consistent launch paths.
@@ -158,6 +159,30 @@ Telegram can return different slash-command menus by command scope and language 
 
 - Telegram slash-command menus no longer show the stale 18-command list for English, French, or Arabic users.
 - The local source of truth, GitHub, Railway runtime, and Telegram command scopes all match the same command list.
+
+## Advertised command handler hotfix
+
+Status: **Tested locally; publish pending**
+
+### Root cause
+
+The 36-command Telegram menu was synchronized before every command had a matching registered handler. Telegraf correctly received `/fundme`, but because `index.js` did not register `bot.command('fundme', ...)`, it reached the generic unknown-command fallback.
+
+### Tasks
+
+- [x] Add persistent store support for shared funds, chip-ins, corrections, house rules, quiet hours, party mode, shared tab items, and planning/mode notes.
+- [x] Register handlers for every advertised Telegram command.
+- [x] Add a regression test proving every command in `BOT_COMMANDS` has a registered handler.
+- [x] Add persistence tests for the new feature buckets.
+- [x] Run local verification.
+- [ ] Commit and merge the fix from the local source of truth.
+- [ ] Let Railway deploy the same Git commit.
+- [ ] Verify live Telegram commands such as `/fundme`, `/funds`, `/corrections`, `/houserules`, `/party`, `/dinner`, and `/mood` no longer hit the unknown-command fallback.
+
+### Verification evidence
+
+- `npm run typecheck`: passed, 29/29 tests.
+- `npm run build`: passed.
 
 ## Phase 2 — Fix Telegram group commands and dashboard launching
 
