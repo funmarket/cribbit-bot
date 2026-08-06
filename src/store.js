@@ -2,10 +2,11 @@ const fs = require('fs');
 const { calculateBalances } = require('./balances');
 const { cleanName, createExpense, uniqueNames } = require('./expenses');
 const { normalizeLocale } = require('./i18n');
+const { DEFAULT_MODE, normalizeMode } = require('./modes');
 
 const now = () => new Date().toISOString();
 const makeId = (prefix) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-const defaultSettings = (houseName = 'My Crib') => ({ houseName, currency: 'USD', timezone: 'UTC', notifications: true, weeklyDigest: true, quietHours: '', houseRules: '', partyMode: false, defaultLocale: 'en' });
+const defaultSettings = (houseName = 'My Crib') => ({ houseName, currency: 'USD', timezone: 'UTC', notifications: true, weeklyDigest: true, quietHours: '', houseRules: '', partyMode: false, defaultLocale: 'en', cribMode: DEFAULT_MODE });
 
 function createStore(dataFile) {
   const state = { expenses: {}, chores: {}, members: {}, memberProfiles: {}, groceries: {}, funds: {}, corrections: {}, notes: {}, activity: {}, settings: {}, processedUpdates: {}, userPreferences: {} };
@@ -21,11 +22,17 @@ function createStore(dataFile) {
     fs.renameSync(temporaryFile, dataFile);
   }
   function list(bucket, chatId) { state[bucket][chatId] ||= []; return state[bucket][chatId]; }
-  function settings(chatId, houseName) { state.settings[chatId] ||= defaultSettings(houseName); state.settings[chatId].defaultLocale = normalizeLocale(state.settings[chatId].defaultLocale); return state.settings[chatId]; }
+  function settings(chatId, houseName) {
+    state.settings[chatId] ||= defaultSettings(houseName);
+    state.settings[chatId].defaultLocale = normalizeLocale(state.settings[chatId].defaultLocale);
+    state.settings[chatId].cribMode = normalizeMode(state.settings[chatId].cribMode);
+    return state.settings[chatId];
+  }
   function userPreference(telegramId) { const key = String(telegramId); state.userPreferences[key] ||= {}; return state.userPreferences[key]; }
   function userLocale(telegramId) { return state.userPreferences[String(telegramId)]?.locale || null; }
   function setUserLocale(telegramId, locale) { const preference = userPreference(telegramId); preference.locale = normalizeLocale(locale); preference.updatedAt = now(); save(); return preference.locale; }
   function resolveLocale(chatId, telegramUser, options = {}) { const saved = userLocale(telegramUser?.id); const telegramLocale = telegramUser?.language_code ? normalizeLocale(telegramUser.language_code) : null; const houseLocale = settings(chatId).defaultLocale; return options.groupMessage ? houseLocale : saved || telegramLocale || houseLocale || 'en'; }
+
   function addActivity(chatId, type, message, actor, metadata = {}) {
     const event = { id: makeId('a'), type, message, actor: cleanName(actor), metadata, createdAt: now() };
     const events = list('activity', chatId); events.unshift(event); state.activity[chatId] = events.slice(0, 300); return event;
@@ -36,6 +43,7 @@ function createStore(dataFile) {
     const telegramId = String(telegramUser.id);
     const displayName = cleanName(telegramUser.first_name || telegramUser.username || telegramId);
     let profile = profiles.find((item) => item.telegramId === telegramId);
+
     if (!profile) {
       profile = { id: makeId('m'), telegramId, displayName, username: telegramUser.username ? `@${telegramUser.username}` : '', role: profiles.length ? 'member' : 'owner', joinedAt: now(), active: true, awayUntil: null, dietaryPreferences: '', notificationFrequency: 'immediate', locale: userLocale(telegramId) };
       profiles.push(profile);
@@ -154,13 +162,14 @@ function createStore(dataFile) {
   }
   function listNotes(chatId, type, limit = 5) { return list('notes', chatId).filter((note) => note.type === type).slice(0, limit); }
   function updateSettings(chatId, patch, actor) {
-    const allowed = ['houseName', 'currency', 'timezone', 'notifications', 'weeklyDigest', 'quietHours', 'houseRules', 'partyMode', 'defaultLocale']; const current = settings(chatId);
+    const allowed = ['houseName', 'currency', 'timezone', 'notifications', 'weeklyDigest', 'quietHours', 'houseRules', 'partyMode', 'defaultLocale', 'cribMode']; const current = settings(chatId);
     if (patch.currency !== undefined) {
       const currency = String(patch.currency).trim().toUpperCase();
       try { new Intl.NumberFormat('en', { style: 'currency', currency }).format(1); } catch { throw Object.assign(new Error('Choose a valid three-letter currency code.'), { statusCode: 400 }); }
       patch = { ...patch, currency };
     }
     if (patch.defaultLocale !== undefined) patch = { ...patch, defaultLocale: normalizeLocale(patch.defaultLocale) };
+    if (patch.cribMode !== undefined) patch = { ...patch, cribMode: normalizeMode(patch.cribMode) };
     for (const key of allowed) if (patch[key] !== undefined) current[key] = typeof patch[key] === 'string' ? patch[key].trim().slice(0, 80) : Boolean(patch[key]);
     current.updatedAt = now(); addActivity(chatId, 'settings.updated', `${actor} updated house settings`, actor); save(); return current;
   }
