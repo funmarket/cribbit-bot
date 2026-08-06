@@ -14,6 +14,7 @@ const { startDashboardServer } = require('../src/dashboard-server');
 const { dashboardUrl, menuAppUrl, mainAppUrl, dashboardReplyMarkup } = require('../src/dashboard-links');
 const { BOT_COMMANDS, commandsForLocale } = require('../src/bot-commands');
 const { normalizeLocale, translate, missingTranslationKeys } = require('../src/i18n');
+const { DEFAULT_MODE, MODE_DEFINITIONS, normalizeMode, modeDefinition, modeNames, commandsForMode, isPrimaryModeCommand } = require('../src/modes');
 const { normalizedOrigin, resolveApiBaseUrl, preferredHouseId } = require('../public/app-config');
 
 test('parses natural-language expenses including participant rules', () => {
@@ -169,6 +170,25 @@ test('Telegram command menu includes persistent product areas', () => {
   assert.deepEqual(BOT_COMMANDS.map(({ command }) => command), expectedCommands);
   for (const locale of ['en', 'fr', 'ar']) assert.deepEqual(commandsForLocale(locale).map(({ command }) => command), expectedCommands);
   assert.ok(BOT_COMMANDS.every(({ description }) => description.length > 0 && description.length <= 256));
+});
+
+test('central Crib Mode definitions are complete and command-safe', () => {
+  assert.equal(DEFAULT_MODE, 'roomies');
+  assert.equal(normalizeMode(''), 'roomies'); assert.equal(normalizeMode(null), 'roomies'); assert.equal(normalizeMode('not-a-mode'), 'roomies');
+  assert.equal(normalizeMode('Twin Soul'), 'twinsoul'); assert.equal(normalizeMode('family'), 'nest'); assert.equal(normalizeMode('work'), 'colleagues');
+  const commandNames = new Set(BOT_COMMANDS.map(({ command }) => command));
+  for (const mode of Object.values(MODE_DEFINITIONS)) {
+    assert.equal(mode.key, normalizeMode(mode.key));
+    for (const property of ['key', 'name', 'audience', 'personality', 'primaryCommands', 'overviewCards', 'tone']) assert.ok(mode[property], `${mode.key} missing ${property}`);
+    assert.ok(Array.isArray(mode.primaryCommands) && mode.primaryCommands.length > 0);
+    assert.ok(Array.isArray(mode.overviewCards) && mode.overviewCards.length > 0);
+    for (const command of mode.primaryCommands) assert.ok(commandNames.has(command), `${mode.key} references unknown command ${command}`);
+  }
+  assert.deepEqual(modeNames().map(({ key }) => key), ['roomies', 'cubs', 'nest', 'twinsoul', 'colleagues', 'buddies', 'crew', 'guild']);
+  assert.equal(modeDefinition('couple').key, 'twinsoul');
+  assert.ok(commandsForMode('twinsoul').includes('/date')); assert.ok(commandsForMode('twinsoul').includes('/ours')); assert.ok(commandsForMode('twinsoul').includes('/mood'));
+  assert.ok(commandsForMode('nest').includes('/pickup')); assert.ok(commandsForMode('nest').includes('/sundayplan')); assert.ok(commandsForMode('nest').includes('/dinner'));
+  assert.equal(isPrimaryModeCommand('nest', '/pickup'), true); assert.equal(isPrimaryModeCommand('nest', 'party'), false);
 });
 
 test('every advertised Telegram command has a registered handler', () => {
