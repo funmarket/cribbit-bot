@@ -1,9 +1,53 @@
-const DESCRIPTIONS = {
-  en: { start: 'Open Cribbit and see examples', split: 'Split an expense', balance: 'View your balance', settle: 'View settlement suggestions', last: 'Show the latest expense', undo: 'Undo the latest expense', void: 'Void an expense by ID', chore: 'Add or manage a chore', chores: 'View all chores', done: 'Mark a chore completed', grocery: 'Add or update groceries', groceries: 'View the grocery list', roomies: 'View house members', activity: 'View recent activity', settings: 'View house settings', dashboard: 'Open Cribbit', help: 'View available commands', language: 'Change language' },
-  fr: { start: 'Ouvrir Cribbit et voir des exemples', split: 'Partager une dépense', balance: 'Voir votre solde', settle: 'Voir les remboursements', last: 'Voir la dernière dépense', undo: 'Annuler la dernière dépense', void: 'Annuler une dépense par ID', chore: 'Ajouter ou gérer une tâche', chores: 'Voir toutes les tâches', done: 'Marquer une tâche terminée', grocery: 'Ajouter ou modifier les courses', groceries: 'Voir la liste de courses', roomies: 'Voir les colocataires', activity: 'Voir l’activité récente', settings: 'Voir les paramètres du logement', dashboard: 'Ouvrir Cribbit', help: 'Voir les commandes disponibles', language: 'Changer la langue' },
-  ar: { start: 'فتح Cribbit وعرض أمثلة', split: 'تقسيم مصروف', balance: 'عرض رصيدك', settle: 'عرض اقتراحات التسوية', last: 'عرض آخر مصروف', undo: 'التراجع عن آخر مصروف', void: 'إلغاء مصروف عبر المعرف', chore: 'إضافة أو إدارة مهمة منزلية', chores: 'عرض جميع المهام', done: 'تحديد مهمة كمكتملة', grocery: 'إضافة أو تحديث البقالة', groceries: 'عرض قائمة البقالة', roomies: 'عرض سكان المنزل', activity: 'عرض النشاط الأخير', settings: 'عرض إعدادات المنزل', dashboard: 'فتح Cribbit', help: 'عرض الأوامر المتاحة', language: 'تغيير اللغة' }
+const COMMANDS = [
+  ['start', 'Open Cribbit'],
+  ['help', 'Show commands'],
+  ['setup', 'Set up your household'],
+  ['split', 'Log an expense'],
+  ['balance', 'View balances'],
+  ['settle', 'Show settlement suggestions'],
+  ['undo', 'Undo the last expense'],
+  ['void', 'Void an expense by ID'],
+  ['last', 'Show the last expense'],
+  ['chore', 'Add or manage chores'],
+  ['chores', 'List chores'],
+  ['done', 'Mark a chore complete'],
+  ['grocery', 'Add a grocery item'],
+  ['groceries', 'View the grocery list'],
+  ['fundme', 'Create a shared fund goal'],
+  ['chipin', 'Contribute to a fund'],
+  ['funds', 'List shared funds'],
+  ['corrections', 'View pending corrections'],
+  ['confirm', 'Confirm a correction'],
+  ['reject', 'Reject a correction'],
+  ['roomies', 'Show household members'],
+  ['activity', 'View recent activity'],
+  ['settings', 'View or update house settings'],
+  ['dashboard', 'Open Cribbit dashboard'],
+  ['language', 'Change language'],
+  ['houserules', 'View or set house rules'],
+  ['quiethours', 'View or set quiet hours'],
+  ['party', 'Party mode tools'],
+  ['tab', 'Shared tab tools'],
+  ['ding', 'Ping who is free'],
+  ['dinner', 'Dinner planning'],
+  ['sundayplan', 'Weekly planning'],
+  ['pickup', 'Family pickup task'],
+  ['date', 'Date mode tools'],
+  ['ours', 'Couple summary'],
+  ['mood', 'Light couple check-in']
+];
+
+const LOCALIZED_DESCRIPTIONS = {
+  en: Object.fromEntries(COMMANDS),
+  fr: Object.fromEntries(COMMANDS),
+  ar: Object.fromEntries(COMMANDS)
 };
-const ORDER = ['start', 'split', 'balance', 'settle', 'last', 'undo', 'void', 'chore', 'chores', 'done', 'grocery', 'groceries', 'roomies', 'activity', 'settings', 'dashboard', 'help', 'language'];
-const commandsForLocale = (locale = 'en') => ORDER.map((command) => ({ command, description: (DESCRIPTIONS[locale] || DESCRIPTIONS.en)[command] }));
+
+const commandsForLocale = (locale = 'en') => {
+  const descriptions = LOCALIZED_DESCRIPTIONS[locale] || LOCALIZED_DESCRIPTIONS.en;
+  return COMMANDS.map(([command]) => ({ command, description: descriptions[command] || LOCALIZED_DESCRIPTIONS.en[command] }));
+};
+
 const BOT_COMMANDS = commandsForLocale('en');
+
 module.exports = { BOT_COMMANDS, commandsForLocale };
