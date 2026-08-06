@@ -60,6 +60,17 @@ test('persists groceries, roomies, activity, and settings in one store', (t) => 
   assert.equal(reloaded.groceries[0].name, 'Milk'); assert.equal(reloaded.chores[0].task, 'Dishes'); assert.equal(reloaded.members[0].telegramId, '42'); assert.equal(reloaded.settings.currency, 'GBP'); assert.ok(reloaded.activity.length >= 4);
 });
 
+test('persists crib mode settings and normalizes invalid values', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-mode-settings-')); const file = path.join(directory, 'data.json'); t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const store = createStore(file);
+  store.registerMember('123', { id: 42, first_name: 'Alex' }, 'Oak Street');
+  assert.equal(store.dashboard('123').settings.cribMode, 'roomies');
+  assert.equal(store.updateSettings('123', { cribMode: 'Nest' }, 'Alex').cribMode, 'nest');
+  assert.equal(createStore(file).dashboard('123').settings.cribMode, 'nest');
+  store.updateSettings('123', { cribMode: 'definitely-not-real' }, 'Alex');
+  assert.equal(createStore(file).dashboard('123').settings.cribMode, 'roomies');
+});
+
 test('persists funds, corrections, house rules, quiet hours, and planning notes', (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-features-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true })); const file = path.join(directory, 'data.json');
   const store = createStore(file); store.registerMember('123', { id: 42, first_name: 'Alex' }, 'Oak Street');

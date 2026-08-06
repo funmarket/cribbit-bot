@@ -292,13 +292,13 @@ Exit criteria:
 
 ### Phase 1 — Mode model and source module
 
-Status: implemented and tested locally; publish pending
+Status: implemented and tested locally through Slice C; publish pending
 
 Tasks:
 
 - [x] Add `src/modes.js`.
 - [x] Define mode keys, display names, descriptions, tone labels, primary commands, dashboard cards, and aliases.
-- [ ] Add `cribMode: "roomies"` to default settings.
+- [x] Add `cribMode: "roomies"` to default settings.
 - [x] Normalize invalid/missing modes back to `roomies`.
 - [x] Export helpers such as:
   - `normalizeMode(value)`;
@@ -609,20 +609,20 @@ Exact files to change, in order:
 
 Store changes:
 
-- [ ] Import `DEFAULT_MODE` and `normalizeMode` from `src\modes.js`.
-- [ ] Add `cribMode: DEFAULT_MODE` to `defaultSettings()`.
-- [ ] In `settings(chatId, houseName)`, normalize existing `state.settings[chatId].cribMode`.
-- [ ] Add `cribMode` to `updateSettings()` allowed keys.
-- [ ] Ensure invalid saved values normalize to `roomies`.
-- [ ] Keep existing `quietHours`, `houseRules`, and `partyMode` behavior intact.
+- [x] Import `DEFAULT_MODE` and `normalizeMode` from `src\modes.js`.
+- [x] Add `cribMode: DEFAULT_MODE` to `defaultSettings()`.
+- [x] In `settings(chatId, houseName)`, normalize existing `state.settings[chatId].cribMode`.
+- [x] Add `cribMode` to `updateSettings()` allowed keys.
+- [x] Ensure invalid saved values normalize to `roomies`.
+- [x] Keep existing `quietHours`, `houseRules`, and `partyMode` behavior intact.
 
 Test checklist:
 
-- [ ] New stores default to `cribMode: "roomies"`.
-- [ ] Updating settings with `{ cribMode: "nest" }` persists.
-- [ ] Reloading the store preserves `cribMode`.
-- [ ] Invalid stored mode reloads as `roomies`.
-- [ ] `dashboard(chatId).settings.cribMode` is present.
+- [x] New stores default to `cribMode: "roomies"`.
+- [x] Updating settings with `{ cribMode: "nest" }` persists.
+- [x] Reloading the store preserves `cribMode`.
+- [x] Invalid stored mode reloads as `roomies`.
+- [x] `dashboard(chatId).settings.cribMode` is present.
 
 Commands:
 
@@ -636,6 +636,20 @@ Exit criteria:
 
 - Mode is stored per Crib.
 - No command menu change yet.
+
+Slice C evidence:
+
+```text
+Slice: C — Persist settings.cribMode
+Starting commit: 2845329
+Files changed locally: src/store.js, test/cribbit.test.js, modeplan.md
+npm run typecheck: passed, 31/31 tests
+npm run build: passed
+git diff --check: passed with LF-to-CRLF warnings only
+Runtime behavior changed: settings now persist normalized cribMode per Crib
+Command menu changed: no
+Known repair included: restored registerMember profile creation from a dirty partial local edit before continuing
+```
 
 ### Slice D — Add `/mode` command and command-menu sync
 
