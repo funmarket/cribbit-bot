@@ -14,7 +14,7 @@ const { startDashboardServer } = require('../src/dashboard-server');
 const { dashboardUrl, menuAppUrl, mainAppUrl, dashboardReplyMarkup } = require('../src/dashboard-links');
 const { BOT_COMMANDS, commandsForLocale } = require('../src/bot-commands');
 const { normalizeLocale, translate, missingTranslationKeys } = require('../src/i18n');
-const { DEFAULT_MODE, MODE_DEFINITIONS, normalizeMode, modeDefinition, modeNames, commandsForMode, isPrimaryModeCommand } = require('../src/modes');
+const { DEFAULT_MODE, MODE_DEFINITIONS, normalizeMode, modeDefinition, modeNames, modeBadge, commandsForMode, isPrimaryModeCommand } = require('../src/modes');
 const { normalizedOrigin, resolveApiBaseUrl, preferredHouseId } = require('../public/app-config');
 
 test('parses natural-language expenses including participant rules', () => {
@@ -64,11 +64,11 @@ test('persists crib mode settings and normalizes invalid values', (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-mode-settings-')); const file = path.join(directory, 'data.json'); t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const store = createStore(file);
   store.registerMember('123', { id: 42, first_name: 'Alex' }, 'Oak Street');
-  assert.equal(store.dashboard('123').settings.cribMode, 'roomies');
-  assert.equal(store.updateSettings('123', { cribMode: 'Nest' }, 'Alex').cribMode, 'nest');
-  assert.equal(createStore(file).dashboard('123').settings.cribMode, 'nest');
+  assert.equal(store.dashboard('123').settings.cribMode, 'classic');
+  assert.equal(store.updateSettings('123', { cribMode: 'Nest' }, 'Alex').cribMode, 'famsquad');
+  assert.equal(createStore(file).dashboard('123').settings.cribMode, 'famsquad');
   store.updateSettings('123', { cribMode: 'definitely-not-real' }, 'Alex');
-  assert.equal(createStore(file).dashboard('123').settings.cribMode, 'roomies');
+  assert.equal(createStore(file).dashboard('123').settings.cribMode, 'classic');
 });
 
 test('persists funds, corrections, house rules, quiet hours, and planning notes', (t) => {
@@ -183,23 +183,47 @@ test('Telegram command menu includes persistent product areas', () => {
   assert.ok(BOT_COMMANDS.every(({ description }) => description.length > 0 && description.length <= 256));
 });
 
-test('central Crib Mode definitions are complete and command-safe', () => {
-  assert.equal(DEFAULT_MODE, 'roomies');
-  assert.equal(normalizeMode(''), 'roomies'); assert.equal(normalizeMode(null), 'roomies'); assert.equal(normalizeMode('not-a-mode'), 'roomies');
-  assert.equal(normalizeMode('Twin Soul'), 'twinsoul'); assert.equal(normalizeMode('family'), 'nest'); assert.equal(normalizeMode('work'), 'colleagues');
+test('central Crib Mode definitions are complete and emoji-aware', () => {
+  assert.equal(DEFAULT_MODE, 'classic');
+  assert.equal(normalizeMode(''), 'classic');
+  assert.equal(normalizeMode(null), 'classic');
+  assert.equal(normalizeMode('not-a-mode'), 'classic');
+  assert.equal(normalizeMode('Twin Soul'), 'twinsoul');
+  assert.equal(normalizeMode('family'), 'famsquad');
+  assert.equal(normalizeMode('work'), 'workcrew');
+  assert.equal(normalizeMode('cubs'), 'buds');
+  assert.equal(normalizeMode('buddies'), 'buds');
+  assert.equal(normalizeMode('nest'), 'famsquad');
+  assert.equal(normalizeMode('colleagues'), 'workcrew');
+  assert.equal(normalizeMode('crew'), 'wandercrew');
+  assert.equal(normalizeMode('travel'), 'wandercrew');
+  const modeKeys = modeNames().map(({ key }) => key);
+  assert.deepEqual(modeKeys, ['classic', 'roomies', 'buds', 'ladiessecret', 'twinsoul', 'famsquad', 'schoolbuddies', 'workcrew', 'wandercrew', 'pawpack']);
   const commandNames = new Set(BOT_COMMANDS.map(({ command }) => command));
   for (const mode of Object.values(MODE_DEFINITIONS)) {
     assert.equal(mode.key, normalizeMode(mode.key));
-    for (const property of ['key', 'name', 'audience', 'personality', 'primaryCommands', 'overviewCards', 'tone']) assert.ok(mode[property], `${mode.key} missing ${property}`);
+    for (const property of ['key', 'name', 'emoji', 'symbol', 'tagline', 'audience', 'personality', 'memberLabel', 'houseLabel', 'color', 'primaryCommands', 'plannedCommands', 'overviewCards', 'tone']) assert.ok(mode[property] || Array.isArray(mode[property]), `${mode.key} missing ${property}`);
     assert.ok(Array.isArray(mode.primaryCommands) && mode.primaryCommands.length > 0);
-    assert.ok(Array.isArray(mode.overviewCards) && mode.overviewCards.length > 0);
     for (const command of mode.primaryCommands) assert.ok(commandNames.has(command), `${mode.key} references unknown command ${command}`);
+    assert.ok(Array.isArray(mode.plannedCommands), `${mode.key} plannedCommands must be an array`);
+    for (const planned of mode.plannedCommands) {
+      assert.equal(typeof planned.command, 'string', `${mode.key} planned command missing command`);
+      assert.equal(planned.command.startsWith('/'), false, `${mode.key} planned command should not include slash`);
+      assert.equal(typeof planned.symbol, 'string', `${mode.key} planned command missing symbol`);
+      assert.equal(typeof planned.description, 'string', `${mode.key} planned command missing description`);
+    }
+    assert.ok(Array.isArray(mode.overviewCards) && mode.overviewCards.length > 0);
+    assert.equal(modeBadge(mode.key).startsWith(mode.emoji), true);
   }
-  assert.deepEqual(modeNames().map(({ key }) => key), ['roomies', 'cubs', 'nest', 'twinsoul', 'colleagues', 'buddies', 'crew', 'guild']);
   assert.equal(modeDefinition('couple').key, 'twinsoul');
-  assert.ok(commandsForMode('twinsoul').includes('/date')); assert.ok(commandsForMode('twinsoul').includes('/ours')); assert.ok(commandsForMode('twinsoul').includes('/mood'));
-  assert.ok(commandsForMode('nest').includes('/pickup')); assert.ok(commandsForMode('nest').includes('/sundayplan')); assert.ok(commandsForMode('nest').includes('/dinner'));
-  assert.equal(isPrimaryModeCommand('nest', '/pickup'), true); assert.equal(isPrimaryModeCommand('nest', 'party'), false);
+  assert.ok(commandsForMode('twinsoul').includes('/date'));
+  assert.ok(commandsForMode('twinsoul').includes('/ours'));
+  assert.ok(commandsForMode('twinsoul').includes('/mood'));
+  assert.ok(commandsForMode('famsquad').includes('/pickup'));
+  assert.ok(commandsForMode('famsquad').includes('/sundayplan'));
+  assert.ok(commandsForMode('famsquad').includes('/dinner'));
+  assert.equal(isPrimaryModeCommand('famsquad', '/pickup'), true);
+  assert.equal(isPrimaryModeCommand('famsquad', 'party'), false);
 });
 
 test('every advertised Telegram command has a registered handler', () => {
@@ -211,7 +235,10 @@ test('every advertised Telegram command has a registered handler', () => {
 });
 
 test('normalizes supported Telegram locale variants and falls back to English', () => {
-  assert.equal(normalizeLocale('en-GB'), 'en'); assert.equal(normalizeLocale('fr-CA'), 'fr'); assert.equal(normalizeLocale('ar-TN'), 'ar'); assert.equal(normalizeLocale('de-DE'), 'en');
+  assert.equal(normalizeLocale('en-GB'), 'en');
+  assert.equal(normalizeLocale('fr-CA'), 'fr');
+  assert.equal(normalizeLocale('ar-TN'), 'ar');
+  assert.equal(normalizeLocale('de-DE'), 'en');
 });
 
 test('translation fallback and resource completeness', () => {
