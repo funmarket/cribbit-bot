@@ -48,6 +48,17 @@ function createStore(dataFile) {
   }
   function isMember(chatId, telegramId) { return list('memberProfiles', chatId).some((item) => item.telegramId === String(telegramId) && item.active); }
   function memberByTelegramId(chatId, telegramId) { return list('memberProfiles', chatId).find((item) => item.telegramId === String(telegramId)); }
+  function housesForTelegramId(telegramId) {
+    const expectedId = String(telegramId);
+    return Object.entries(state.memberProfiles)
+      .filter(([chatId, profiles]) => String(chatId).startsWith('-') && Array.isArray(profiles) && profiles.some((item) => item.telegramId === expectedId && item.active))
+      .map(([chatId, profiles]) => {
+        const member = profiles.find((item) => item.telegramId === expectedId && item.active);
+        const houseSettings = state.settings[chatId] || defaultSettings();
+        return { chatId, houseName: houseSettings.houseName || 'My Crib', role: member.role || 'member' };
+      })
+      .sort((a, b) => a.houseName.localeCompare(b.houseName));
+  }
   function memberNames(chatId) { return uniqueNames([...(state.members[chatId] || []), ...list('memberProfiles', chatId).filter((m) => m.active).map((m) => m.displayName)]); }
   function addExpense(chatId, details, actor, source = 'telegram') {
     const expense = createExpense({ ...details, addedBy: actor, participants: details.participants?.length ? details.participants : memberNames(chatId), source });
@@ -97,7 +108,7 @@ function createStore(dataFile) {
   }
   function markUpdate(updateId) { if (updateId == null) return true; if (state.processedUpdates[updateId]) return false; state.processedUpdates[updateId] = now(); const ids = Object.keys(state.processedUpdates); if (ids.length > 1000) ids.slice(0, ids.length - 1000).forEach((id) => delete state.processedUpdates[id]); save(); return true; }
   function clear(chatId) { for (const key of ['expenses', 'chores', 'members', 'memberProfiles', 'groceries', 'activity', 'settings']) state[key][chatId] = key === 'settings' ? defaultSettings() : []; save(); }
-  return { state, save, registerMember, isMember, memberByTelegramId, memberNames, addExpense, addChore, findChore, updateChore, deleteChore, addGrocery, updateGrocery, deleteGrocery, updateSettings, dashboard, addActivity, markUpdate, clear, settings, userLocale, setUserLocale, resolveLocale };
+  return { state, save, registerMember, isMember, memberByTelegramId, housesForTelegramId, memberNames, addExpense, addChore, findChore, updateChore, deleteChore, addGrocery, updateGrocery, deleteGrocery, updateSettings, dashboard, addActivity, markUpdate, clear, settings, userLocale, setUserLocale, resolveLocale };
 }
 
 module.exports = { createStore, defaultSettings };

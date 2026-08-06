@@ -10,6 +10,7 @@ const { parseChoreInput } = require('../src/chores');
 const { createStore } = require('../src/store');
 const { validateTelegramInitData } = require('../src/telegram-auth');
 const { startDashboardServer } = require('../src/dashboard-server');
+const { dashboardUrl, menuAppUrl } = require('../src/dashboard-links');
 const { BOT_COMMANDS, commandsForLocale } = require('../src/bot-commands');
 const { normalizeLocale, translate, missingTranslationKeys } = require('../src/i18n');
 
@@ -42,6 +43,18 @@ test('persists groceries, roomies, activity, and settings in one store', (t) => 
   assert.equal(reloaded.groceries[0].name, 'Milk'); assert.equal(reloaded.chores[0].task, 'Dishes'); assert.equal(reloaded.members[0].telegramId, '42'); assert.equal(reloaded.settings.currency, 'GBP'); assert.ok(reloaded.activity.length >= 4);
 });
 
+test('discovers only active shared-house memberships for a Telegram user', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-houses-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true })); const store = createStore(path.join(directory, 'data.json'));
+  store.registerMember('-1001', { id: 42, first_name: 'Alex' }, 'Oak Street'); store.registerMember('-1002', { id: 42, first_name: 'Alex' }, 'Pine House'); store.registerMember('42', { id: 42, first_name: 'Alex' }, 'Private chat');
+  assert.deepEqual(store.housesForTelegramId(42).map(({ chatId, houseName }) => ({ chatId, houseName })), [{ chatId: '-1001', houseName: 'Oak Street' }, { chatId: '-1002', houseName: 'Pine House' }]);
+});
+
+test('builds canonical inline and global menu Mini App URLs', () => {
+  const env = { MINI_APP_URL: 'https://cribbit-dashboard-sigma.vercel.app/app', RAILWAY_PUBLIC_DOMAIN: 'cribbit-production.up.railway.app' };
+  assert.equal(dashboardUrl(env, -1001), 'https://cribbit-dashboard-sigma.vercel.app/app?chatId=-1001&apiBaseUrl=https%3A%2F%2Fcribbit-production.up.railway.app');
+  assert.equal(menuAppUrl(env), 'https://cribbit-dashboard-sigma.vercel.app/app?apiBaseUrl=https%3A%2F%2Fcribbit-production.up.railway.app');
+});
+
 test('deduplicates Telegram update identifiers', (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true })); const store = createStore(path.join(directory, 'data.json'));
   assert.equal(store.markUpdate(1001), true); assert.equal(store.markUpdate(1001), false);
@@ -59,10 +72,13 @@ test('serves authenticated dashboard data and persistent actions', async (t) => 
   let groceries = []; const server = startDashboardServer({
     getDashboard: (_chatId, viewer) => ({ viewer, expenses: [], chores: [], groceries, members: [], activity: [], settings: { currency: 'USD' }, balances: calculateBalances([]) }),
     performAction: (_chatId, action, payload) => { if (action !== 'grocery.add') throw Object.assign(new Error('Unsupported'), { statusCode: 400 }); const item = { id: 'g1', name: payload.name }; groceries.push(item); return item; },
+    listHouses: (initData) => { if (initData !== 'valid') throw Object.assign(new Error('Unauthorized'), { statusCode: 401 }); return { houses: [{ chatId: '123', houseName: 'Oak Street' }] }; },
     authenticate: (initData) => { if (initData !== 'valid') throw Object.assign(new Error('Unauthorized'), { statusCode: 401 }); return { displayName: 'Alex' }; }, port: 0, allowedOrigin: 'https://cribbit.vercel.app'
   });
   await new Promise((resolve) => server.once('listening', resolve)); t.after(() => server.close()); const base = `http://127.0.0.1:${server.address().port}`;
   const denied = await fetch(`${base}/api/dashboard?chatId=123`); assert.equal(denied.status, 401);
+  const deniedHouses = await fetch(`${base}/api/houses`); assert.equal(deniedHouses.status, 401);
+  const housesResponse = await fetch(`${base}/api/houses`, { headers: { Origin: 'https://cribbit.vercel.app', 'X-Telegram-Init-Data': 'valid' } }); assert.equal(housesResponse.status, 200); assert.deepEqual((await housesResponse.json()).houses, [{ chatId: '123', houseName: 'Oak Street' }]);
   const action = await fetch(`${base}/api/action`, { method: 'POST', headers: { Origin: 'https://cribbit.vercel.app', 'Content-Type': 'application/json', 'X-Telegram-Init-Data': 'valid' }, body: JSON.stringify({ chatId: '123', action: 'grocery.add', payload: { name: 'Milk' } }) }); assert.equal(action.status, 200);
   const response = await fetch(`${base}/api/dashboard?chatId=123`, { headers: { Origin: 'https://cribbit.vercel.app', 'X-Telegram-Init-Data': 'valid' } }); const body = await response.json(); assert.equal(response.status, 200); assert.equal(response.headers.get('access-control-allow-origin'), 'https://cribbit.vercel.app'); assert.equal(body.groceries[0].name, 'Milk');
 });

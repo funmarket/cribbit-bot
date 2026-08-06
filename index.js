@@ -8,6 +8,7 @@ const { parseChoreInput } = require('./src/chores');
 const { createStore } = require('./src/store');
 const { validateTelegramInitData } = require('./src/telegram-auth');
 const { startDashboardServer } = require('./src/dashboard-server');
+const { dashboardUrl, menuAppUrl, miniAppOrigin } = require('./src/dashboard-links');
 const { BOT_COMMANDS, commandsForLocale } = require('./src/bot-commands');
 const { SUPPORTED_LOCALES, normalizeLocale, translate: t, formatCurrency, localeName } = require('./src/i18n');
 
@@ -18,9 +19,7 @@ fs.mkdirSync(DATA_DIR, { recursive: true }); const store = createStore(DATA_FILE
 const actorName = (ctx) => cleanName(ctx.from?.first_name || ctx.from?.username || String(ctx.from?.id || 'Unknown'));
 const localeFor = (ctx) => store.resolveLocale(ctx.chat.id, ctx.from, { groupMessage: ctx.chat.type !== 'private' });
 const money = (cents, currency = 'USD', locale = 'en') => formatCurrency(locale, cents, currency);
-const dashboardBaseUrl = () => process.env.MINI_APP_URL ? `${process.env.MINI_APP_URL.replace(/\/$/, '')}/app` : (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}/app` : null);
-function dashboardUrl(chatId, view) { const base = dashboardBaseUrl(); if (!base) return null; const params = new URLSearchParams({ chatId: String(chatId) }); if (view) params.set('view', view); if (process.env.MINI_APP_URL && process.env.RAILWAY_PUBLIC_DOMAIN) params.set('apiBaseUrl', `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`); return `${base}?${params}`; }
-const dashboardKeyboard = (chatId, view, locale = 'en') => { const url = dashboardUrl(chatId, view); return url ? { inline_keyboard: [[{ text: t(locale, 'dashboard.open'), web_app: { url } }]] } : undefined; };
+const dashboardKeyboard = (chatId, view, locale = 'en') => { const url = dashboardUrl(process.env, chatId, view); return url ? { inline_keyboard: [[{ text: t(locale, 'dashboard.open'), web_app: { url } }]] } : undefined; };
 const languageKeyboard = { inline_keyboard: [[{ text: 'English', callback_data: 'language:en' }, { text: 'Français', callback_data: 'language:fr' }, { text: 'العربية', callback_data: 'language:ar' }]] };
 
 bot.use(async (ctx, next) => {
@@ -81,6 +80,13 @@ bot.on('text', (ctx) => { const parsed = parseNaturalExpense(ctx.message.text, a
 bot.catch((error, ctx) => console.error(`Bot error for update ${ctx.update.update_id}:`, error));
 
 async function authenticate(initData, chatId) { const user = validateTelegramInitData(initData, process.env.BOT_TOKEN); if (!store.isMember(chatId, user.id)) throw Object.assign(new Error('You are not an active member of this crib.'), { statusCode: 403 }); return { ...store.memberByTelegramId(chatId, user.id), telegramLanguageCode: user.language_code, locale: store.resolveLocale(chatId, user) }; }
+async function listHouses(initData) {
+  const user = validateTelegramInitData(initData, process.env.BOT_TOKEN);
+  return {
+    viewer: { telegramId: String(user.id), displayName: cleanName(user.first_name || user.username || String(user.id)), locale: store.userLocale(user.id) || normalizeLocale(user.language_code) },
+    houses: store.housesForTelegramId(user.id)
+  };
+}
 async function performAction(chatId, action, payload, viewer) {
   const actor = viewer.displayName;
   if (action === 'expense.add') return store.addExpense(chatId, { amount: Number(payload.amount), description: payload.description, paidBy: payload.paidBy || actor, participants: payload.participants || store.memberNames(chatId), category: payload.category, notes: payload.notes }, actor, 'app');
@@ -93,7 +99,15 @@ async function performAction(chatId, action, payload, viewer) {
   throw Object.assign(new Error('Unsupported dashboard action.'), { statusCode: 400 });
 }
 
-const dashboardServer = startDashboardServer({ getDashboard: (chatId, viewer) => store.dashboard(chatId, viewer), performAction, authenticate, port: PORT, allowedOrigin: process.env.MINI_APP_URL || null });
-Promise.all([bot.telegram.setMyCommands(BOT_COMMANDS), ...SUPPORTED_LOCALES.map((locale) => bot.telegram.setMyCommands(commandsForLocale(locale), { language_code: locale }))]).then(() => bot.launch()).then(() => console.log(`Cribbit bot is running. Data file: ${DATA_FILE}`)).catch((error) => { console.error('Failed to start Cribbit:', error); dashboardServer.close(); process.exit(1); });
+const dashboardServer = startDashboardServer({ getDashboard: (chatId, viewer) => store.dashboard(chatId, viewer), listHouses, performAction, authenticate, port: PORT, allowedOrigin: miniAppOrigin(process.env) });
+async function syncMenuButton() {
+  try {
+    const url = menuAppUrl(process.env);
+    if (!url) return console.warn('Cribbit menu button was not synchronized: MINI_APP_URL and RAILWAY_PUBLIC_DOMAIN are required.');
+    await bot.telegram.setChatMenuButton({ menuButton: { type: 'web_app', text: 'Cribbit', web_app: { url } } });
+  }
+  catch (error) { console.error('Cribbit menu button synchronization failed:', error.message); }
+}
+Promise.all([bot.telegram.setMyCommands(BOT_COMMANDS), ...SUPPORTED_LOCALES.map((locale) => bot.telegram.setMyCommands(commandsForLocale(locale), { language_code: locale }))]).then(syncMenuButton).then(() => bot.launch()).then(() => console.log(`Cribbit bot is running. Data file: ${DATA_FILE}`)).catch((error) => { console.error('Failed to start Cribbit:', error); dashboardServer.close(); process.exit(1); });
 function shutdown(signal) { bot.stop(signal); dashboardServer.close(); }
 process.once('SIGINT', () => shutdown('SIGINT')); process.once('SIGTERM', () => shutdown('SIGTERM'));

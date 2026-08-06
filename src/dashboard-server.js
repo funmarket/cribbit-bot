@@ -8,13 +8,17 @@ const jsonHeaders = (cors) => ({ ...cors, 'Content-Type': 'application/json; cha
 const sendJson = (res, status, body, cors = {}) => { res.writeHead(status, jsonHeaders(cors)); res.end(JSON.stringify(body)); };
 function readJson(req) { return new Promise((resolve, reject) => { let body = ''; req.on('data', (chunk) => { body += chunk; if (body.length > 65536) reject(Object.assign(new Error('Request is too large.'), { statusCode: 413 })); }); req.on('end', () => { try { resolve(body ? JSON.parse(body) : {}); } catch { reject(Object.assign(new Error('Request body must be valid JSON.'), { statusCode: 400 })); } }); req.on('error', reject); }); }
 
-function startDashboardServer({ getDashboard, performAction, authenticate, port, allowedOrigin }) {
+function startDashboardServer({ getDashboard, listHouses, performAction, authenticate, port, allowedOrigin }) {
   const normalizedOrigin = allowedOrigin ? allowedOrigin.replace(/\/$/, '') : null;
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`); const origin = req.headers.origin; const cors = normalizedOrigin && origin === normalizedOrigin ? { 'Access-Control-Allow-Origin': normalizedOrigin, Vary: 'Origin' } : {};
     if (req.method === 'OPTIONS') { res.writeHead(204, { ...cors, 'Access-Control-Allow-Headers': 'Content-Type, X-Telegram-Init-Data', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' }); return res.end(); }
     if (url.pathname === '/health') return sendJson(res, 200, { status: 'ok' });
     try {
+      if (url.pathname === '/api/houses' && req.method === 'GET') {
+        if (!listHouses) throw Object.assign(new Error('House discovery is not configured.'), { statusCode: 503 });
+        const result = await listHouses(req.headers['x-telegram-init-data']); return sendJson(res, 200, result, cors);
+      }
       if (url.pathname === '/api/dashboard' && req.method === 'GET') {
         const chatId = url.searchParams.get('chatId'); if (!chatId) throw Object.assign(new Error('chatId is required.'), { statusCode: 400 });
         const viewer = await authenticate(req.headers['x-telegram-init-data'], chatId); return sendJson(res, 200, getDashboard(chatId, viewer), cors);

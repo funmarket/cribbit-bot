@@ -9,7 +9,7 @@
 <body>
 <div id="loading" class="loading-screen" aria-live="polite"><img src="/logo.png" alt="Cribbit"><div><span></span><span></span><span></span></div><p data-i18n="common.loading">Opening your crib…</p></div>
 <section id="auth-gate" class="auth-gate" hidden>
-  <div class="auth-card"><img src="/logo.png" alt="Cribbit"><p class="kicker">TELEGRAM MINI APP</p><h1 data-i18n="auth.title">Open Cribbit through Telegram</h1><p data-i18n="auth.copy">Your house data is protected by Telegram. Open the bot and tap Dashboard to continue.</p><a href="https://t.me/Cribbit_bot" class="primary-button" data-i18n="auth.button">Open @Cribbit_bot</a><a href="?demo=1" class="secondary-button">Explore demo dashboard</a></div>
+  <div class="auth-card"><img src="/logo.png" alt="Cribbit"><p class="kicker">TELEGRAM MINI APP</p><h1 id="auth-title" data-i18n="auth.title">Open Cribbit through Telegram</h1><p id="auth-copy" data-i18n="auth.copy">Your house data is protected by Telegram. Open the bot and tap Dashboard to continue.</p><div id="house-selector" class="house-selector" hidden></div><a id="open-telegram" href="https://t.me/Cribbit_bot?startgroup=true" class="primary-button" data-i18n="auth.button">Open @Cribbit_bot</a><a id="open-demo" href="?demo=1" class="secondary-button">Explore demo dashboard</a></div>
 </section>
 <div id="app" class="app-frame" hidden>
   <aside class="sidebar">
