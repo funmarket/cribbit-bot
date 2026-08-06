@@ -4,13 +4,14 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { Telegraf } = require('telegraf');
 const { parseNaturalExpense, normalizeDigits, parseLocalizedAmount } = require('../src/expenses');
 const { calculateBalances, simplifyDebts } = require('../src/balances');
 const { parseChoreInput } = require('../src/chores');
 const { createStore } = require('../src/store');
 const { validateTelegramInitData } = require('../src/telegram-auth');
 const { startDashboardServer } = require('../src/dashboard-server');
-const { dashboardUrl, menuAppUrl } = require('../src/dashboard-links');
+const { dashboardUrl, menuAppUrl, mainAppUrl, dashboardReplyMarkup } = require('../src/dashboard-links');
 const { BOT_COMMANDS, commandsForLocale } = require('../src/bot-commands');
 const { normalizeLocale, translate, missingTranslationKeys } = require('../src/i18n');
 
@@ -53,6 +54,27 @@ test('builds canonical inline and global menu Mini App URLs', () => {
   const env = { MINI_APP_URL: 'https://cribbit-dashboard-sigma.vercel.app/app', RAILWAY_PUBLIC_DOMAIN: 'cribbit-production.up.railway.app' };
   assert.equal(dashboardUrl(env, -1001), 'https://cribbit-dashboard-sigma.vercel.app/app?chatId=-1001&apiBaseUrl=https%3A%2F%2Fcribbit-production.up.railway.app');
   assert.equal(menuAppUrl(env), 'https://cribbit-dashboard-sigma.vercel.app/app?apiBaseUrl=https%3A%2F%2Fcribbit-production.up.railway.app');
+});
+
+test('uses private Web App buttons only in private chats and group-safe Main App links in groups', () => {
+  const env = { MINI_APP_URL: 'https://cribbit-dashboard-sigma.vercel.app', RAILWAY_PUBLIC_DOMAIN: 'cribbit-production.up.railway.app' };
+  const privateMarkup = dashboardReplyMarkup(env, { chatId: 42, chatType: 'private', botUsername: 'Cribbit_bot', view: 'expenses', text: 'Open Cribbit' });
+  assert.deepEqual(privateMarkup, { inline_keyboard: [[{ text: 'Open Cribbit', web_app: { url: 'https://cribbit-dashboard-sigma.vercel.app/app?chatId=42&view=expenses&apiBaseUrl=https%3A%2F%2Fcribbit-production.up.railway.app' } }]] });
+
+  const groupMarkup = dashboardReplyMarkup(env, { chatId: -1001, chatType: 'supergroup', botUsername: '@Cribbit_bot', view: 'chores', text: 'Open Cribbit' });
+  assert.deepEqual(groupMarkup, { inline_keyboard: [[{ text: 'Open Cribbit', url: 'https://t.me/Cribbit_bot?startapp' }]] });
+  assert.equal('web_app' in groupMarkup.inline_keyboard[0][0], false);
+  assert.equal(mainAppUrl('@Cribbit_bot'), 'https://t.me/Cribbit_bot?startapp');
+});
+
+test('Telegraf routes commands addressed with the bot username in groups', async () => {
+  const bot = new Telegraf('123456:test-token');
+  bot.botInfo = { id: 123456, is_bot: true, first_name: 'Cribbit', username: 'Cribbit_bot' };
+  let handled = false;
+  bot.command('start', (ctx) => { handled = ctx.chat.type === 'supergroup'; });
+  const text = '/start@Cribbit_bot';
+  await bot.handleUpdate({ update_id: 1, message: { message_id: 1, date: 1, text, entities: [{ offset: 0, length: text.length, type: 'bot_command' }], from: { id: 7, is_bot: false, first_name: 'Alex' }, chat: { id: -1001, type: 'supergroup', title: 'Test Crib' } } });
+  assert.equal(handled, true);
 });
 
 test('deduplicates Telegram update identifiers', (t) => {
