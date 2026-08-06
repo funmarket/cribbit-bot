@@ -59,6 +59,20 @@ test('persists groceries, roomies, activity, and settings in one store', (t) => 
   assert.equal(reloaded.groceries[0].name, 'Milk'); assert.equal(reloaded.chores[0].task, 'Dishes'); assert.equal(reloaded.members[0].telegramId, '42'); assert.equal(reloaded.settings.currency, 'GBP'); assert.ok(reloaded.activity.length >= 4);
 });
 
+test('persists funds, corrections, house rules, quiet hours, and planning notes', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-features-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true })); const file = path.join(directory, 'data.json');
+  const store = createStore(file); store.registerMember('123', { id: 42, first_name: 'Alex' }, 'Oak Street');
+  const fund = store.addFund('123', { title: 'New couch', target: 250 }, 'Alex'); store.chipInFund('123', fund.id, 25, 'Maya');
+  const correction = store.addCorrection('123', 'Pizza should be 30 not 300', 'Alex'); store.updateCorrection('123', correction.id, 'confirmed', 'Maya');
+  store.updateSettings('123', { houseRules: 'Clean up after dinner', quietHours: '22:00-08:00', partyMode: true }, 'Alex');
+  store.addNote('123', 'dinner', 'Tacos Friday', 'Alex'); store.addNote('123', 'mood', 'Feeling good', 'Maya');
+  const reloaded = createStore(file).dashboard('123');
+  assert.equal(reloaded.funds[0].title, 'New couch'); assert.equal(reloaded.funds[0].contributions[0].amountCents, 2500);
+  assert.equal(reloaded.corrections[0].status, 'confirmed');
+  assert.equal(reloaded.settings.houseRules, 'Clean up after dinner'); assert.equal(reloaded.settings.quietHours, '22:00-08:00'); assert.equal(reloaded.settings.partyMode, true);
+  assert.equal(reloaded.notes.find((note) => note.type === 'dinner').text, 'Tacos Friday');
+});
+
 test('discovers only active shared-house memberships for a Telegram user', (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-houses-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true })); const store = createStore(path.join(directory, 'data.json'));
   store.registerMember('-1001', { id: 42, first_name: 'Alex' }, 'Oak Street'); store.registerMember('-1002', { id: 42, first_name: 'Alex' }, 'Pine House'); store.registerMember('42', { id: 42, first_name: 'Alex' }, 'Private chat');
@@ -155,6 +169,14 @@ test('Telegram command menu includes persistent product areas', () => {
   assert.deepEqual(BOT_COMMANDS.map(({ command }) => command), expectedCommands);
   for (const locale of ['en', 'fr', 'ar']) assert.deepEqual(commandsForLocale(locale).map(({ command }) => command), expectedCommands);
   assert.ok(BOT_COMMANDS.every(({ description }) => description.length > 0 && description.length <= 256));
+});
+
+test('every advertised Telegram command has a registered handler', () => {
+  const indexSource = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
+  const registered = new Set([...indexSource.matchAll(/bot\.command\('([^']+)'/g)].map((match) => match[1]));
+  for (const match of indexSource.matchAll(/noteCommand\('([^']+)'/g)) registered.add(match[1]);
+  if (/bot\.start\(/.test(indexSource)) registered.add('start');
+  for (const { command } of BOT_COMMANDS) assert.ok(registered.has(command), `Missing bot.command('${command}') handler`);
 });
 
 test('normalizes supported Telegram locale variants and falls back to English', () => {

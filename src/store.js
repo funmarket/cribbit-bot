@@ -5,15 +5,15 @@ const { normalizeLocale } = require('./i18n');
 
 const now = () => new Date().toISOString();
 const makeId = (prefix) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-const defaultSettings = (houseName = 'My Crib') => ({ houseName, currency: 'USD', timezone: 'UTC', notifications: true, weeklyDigest: true, quietHours: '', defaultLocale: 'en' });
+const defaultSettings = (houseName = 'My Crib') => ({ houseName, currency: 'USD', timezone: 'UTC', notifications: true, weeklyDigest: true, quietHours: '', houseRules: '', partyMode: false, defaultLocale: 'en' });
 
 function createStore(dataFile) {
-  const state = { expenses: {}, chores: {}, members: {}, memberProfiles: {}, groceries: {}, activity: {}, settings: {}, processedUpdates: {}, userPreferences: {} };
+  const state = { expenses: {}, chores: {}, members: {}, memberProfiles: {}, groceries: {}, funds: {}, corrections: {}, notes: {}, activity: {}, settings: {}, processedUpdates: {}, userPreferences: {} };
   if (fs.existsSync(dataFile)) {
     try { Object.assign(state, JSON.parse(fs.readFileSync(dataFile, 'utf8'))); }
     catch (error) { console.error(`Could not read ${dataFile}; starting with empty data.`, error); }
   }
-  for (const key of ['expenses', 'chores', 'members', 'memberProfiles', 'groceries', 'activity', 'settings', 'processedUpdates', 'userPreferences']) state[key] ||= {};
+  for (const key of ['expenses', 'chores', 'members', 'memberProfiles', 'groceries', 'funds', 'corrections', 'notes', 'activity', 'settings', 'processedUpdates', 'userPreferences']) state[key] ||= {};
 
   function save() {
     const temporaryFile = `${dataFile}.tmp`;
@@ -119,8 +119,42 @@ function createStore(dataFile) {
     addActivity(chatId, patch.purchased ? 'grocery.purchased' : 'grocery.updated', `${actor} updated ${item.name}`, actor, { groceryId: item.id }); save(); return item;
   }
   function deleteGrocery(chatId, identifier, actor) { const items = list('groceries', chatId); const item = items.find((g) => g.id === identifier); if (!item) return false; state.groceries[chatId] = items.filter((g) => g.id !== item.id); addActivity(chatId, 'grocery.deleted', `${actor} removed ${item.name}`, actor); save(); return true; }
+  function addFund(chatId, details, actor) {
+    const title = String(details.title || '').trim().slice(0, 140); const target = Number(details.target);
+    if (!title || !Number.isFinite(target) || target <= 0) throw Object.assign(new Error('Format: /fundme <goal> <target amount>'), { statusCode: 400 });
+    const fund = { id: makeId('f'), title, targetCents: Math.round(target * 100), contributions: [], createdBy: actor, status: 'active', createdAt: now(), updatedAt: now() };
+    list('funds', chatId).push(fund); addActivity(chatId, 'fund.created', `${actor} created fund “${fund.title}”`, actor, { fundId: fund.id }); save(); return fund;
+  }
+  function findFund(chatId, identifier) { const funds = list('funds', chatId); const index = Number(identifier); return funds.find((fund) => fund.id === identifier) || (Number.isInteger(index) && index > 0 ? funds[index - 1] : null); }
+  function chipInFund(chatId, identifier, amount, actor) {
+    const fund = findFund(chatId, identifier); const value = Number(amount);
+    if (!fund || !Number.isFinite(value) || value <= 0) return null;
+    const contribution = { id: makeId('fc'), amountCents: Math.round(value * 100), by: actor, createdAt: now() };
+    fund.contributions.push(contribution); fund.updatedAt = now();
+    addActivity(chatId, 'fund.contributed', `${actor} chipped in to “${fund.title}”`, actor, { fundId: fund.id, amountCents: contribution.amountCents }); save(); return fund;
+  }
+  function addCorrection(chatId, text, actor) {
+    const message = String(text || '').trim().slice(0, 500);
+    if (!message) throw Object.assign(new Error('Format: /corrections add <what needs correcting>'), { statusCode: 400 });
+    const correction = { id: makeId('r'), message, status: 'pending', createdBy: actor, createdAt: now(), updatedAt: now() };
+    list('corrections', chatId).push(correction); addActivity(chatId, 'correction.created', `${actor} requested a correction`, actor, { correctionId: correction.id }); save(); return correction;
+  }
+  function findCorrection(chatId, identifier) { const corrections = list('corrections', chatId); const index = Number(identifier); return corrections.find((item) => item.id === identifier) || (Number.isInteger(index) && index > 0 ? corrections[index - 1] : null); }
+  function updateCorrection(chatId, identifier, status, actor) {
+    const correction = findCorrection(chatId, identifier); if (!correction || correction.status !== 'pending') return null;
+    correction.status = status; correction.resolvedBy = actor; correction.resolvedAt = now(); correction.updatedAt = now();
+    addActivity(chatId, `correction.${status}`, `${actor} ${status} a correction`, actor, { correctionId: correction.id }); save(); return correction;
+  }
+  function addNote(chatId, type, text, actor, status = 'active') {
+    const body = String(text || '').trim().slice(0, 500);
+    if (!body) throw Object.assign(new Error(`Format: /${type} <details>`), { statusCode: 400 });
+    const note = { id: makeId('n'), type, text: body, status, createdBy: actor, createdAt: now(), updatedAt: now() };
+    list('notes', chatId).unshift(note); state.notes[chatId] = list('notes', chatId).slice(0, 300);
+    addActivity(chatId, `${type}.saved`, `${actor} updated ${type}`, actor, { noteId: note.id }); save(); return note;
+  }
+  function listNotes(chatId, type, limit = 5) { return list('notes', chatId).filter((note) => note.type === type).slice(0, limit); }
   function updateSettings(chatId, patch, actor) {
-    const allowed = ['houseName', 'currency', 'timezone', 'notifications', 'weeklyDigest', 'quietHours', 'defaultLocale']; const current = settings(chatId);
+    const allowed = ['houseName', 'currency', 'timezone', 'notifications', 'weeklyDigest', 'quietHours', 'houseRules', 'partyMode', 'defaultLocale']; const current = settings(chatId);
     if (patch.currency !== undefined) {
       const currency = String(patch.currency).trim().toUpperCase();
       try { new Intl.NumberFormat('en', { style: 'currency', currency }).format(1); } catch { throw Object.assign(new Error('Choose a valid three-letter currency code.'), { statusCode: 400 }); }
@@ -133,11 +167,11 @@ function createStore(dataFile) {
   function dashboard(chatId, viewer) {
     const expenses = activeExpenses(chatId); const chores = list('chores', chatId); const groceries = list('groceries', chatId); const members = list('memberProfiles', chatId); const balances = calculateBalances(expenses, memberNames(chatId));
     const locale = viewer?.telegramId ? resolveLocale(chatId, { id: viewer.telegramId, language_code: viewer.telegramLanguageCode }) : settings(chatId).defaultLocale;
-    return { expenses, chores, groceries, members, activity: list('activity', chatId), settings: settings(chatId), balances, viewer: viewer ? { ...viewer, locale } : null, locale };
+    return { expenses, chores, groceries, funds: list('funds', chatId), corrections: list('corrections', chatId), notes: list('notes', chatId), members, activity: list('activity', chatId), settings: settings(chatId), balances, viewer: viewer ? { ...viewer, locale } : null, locale };
   }
   function markUpdate(updateId) { if (updateId == null) return true; if (state.processedUpdates[updateId]) return false; state.processedUpdates[updateId] = now(); const ids = Object.keys(state.processedUpdates); if (ids.length > 1000) ids.slice(0, ids.length - 1000).forEach((id) => delete state.processedUpdates[id]); save(); return true; }
-  function clear(chatId) { for (const key of ['expenses', 'chores', 'members', 'memberProfiles', 'groceries', 'activity', 'settings']) state[key][chatId] = key === 'settings' ? defaultSettings() : []; save(); }
-  return { state, save, registerMember, isMember, memberByTelegramId, housesForTelegramId, activeChatId, setActiveChatId, clearActiveChatId, memberNames, addExpense, activeExpenses, lastExpense, findExpense, voidExpense, addChore, findChore, updateChore, deleteChore, addGrocery, updateGrocery, deleteGrocery, updateSettings, dashboard, addActivity, markUpdate, clear, settings, userLocale, setUserLocale, resolveLocale };
+  function clear(chatId) { for (const key of ['expenses', 'chores', 'members', 'memberProfiles', 'groceries', 'funds', 'corrections', 'notes', 'activity', 'settings']) state[key][chatId] = key === 'settings' ? defaultSettings() : []; save(); }
+  return { state, save, registerMember, isMember, memberByTelegramId, housesForTelegramId, activeChatId, setActiveChatId, clearActiveChatId, memberNames, addExpense, activeExpenses, lastExpense, findExpense, voidExpense, addChore, findChore, updateChore, deleteChore, addGrocery, updateGrocery, deleteGrocery, addFund, findFund, chipInFund, addCorrection, findCorrection, updateCorrection, addNote, listNotes, updateSettings, dashboard, addActivity, markUpdate, clear, settings, userLocale, setUserLocale, resolveLocale };
 }
 
 module.exports = { createStore, defaultSettings };
