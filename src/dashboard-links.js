@@ -25,10 +25,7 @@ function dashboardUrl(env, chatId, view) {
 
 function menuAppUrl(env) {
   const appOrigin = miniAppOrigin(env);
-  const apiOrigin = railwayApiOrigin(env);
-  if (!appOrigin || !apiOrigin) return null;
-  const params = new URLSearchParams({ apiBaseUrl: apiOrigin });
-  return `${appOrigin}/app?${params}`;
+  return appOrigin ? `${appOrigin}/app` : null;
 }
 
 function mainAppUrl(botUsername) {
