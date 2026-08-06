@@ -32,6 +32,7 @@ Never edit Railway, Vercel, GitHub web UI, Downloads folders, temp folders, or o
 Crib Modes let each household choose the vibe Cribbit should use. A mode changes:
 
 - command suggestions;
+- emojis, symbols, and visual identity;
 - wording/tone;
 - dashboard quick actions;
 - overview cards;
@@ -890,6 +891,7 @@ Mode definition fields checklist:
 - [ ] Every mode has `key`.
 - [ ] Every mode has `name`.
 - [ ] Every mode has `emoji`.
+- [ ] Every mode uses the emoji from the ZIP/reference unless a better Cribbit-specific emoji is explicitly chosen.
 - [ ] Every mode has `tagline`.
 - [ ] Every mode has `audience`.
 - [ ] Every mode has `personality`.
@@ -897,9 +899,18 @@ Mode definition fields checklist:
 - [ ] Every mode has `memberLabel`.
 - [ ] Every mode has `houseLabel`.
 - [ ] Every mode has `color`.
+- [ ] Every mode keeps the reference color/accent so the bot and dashboard feel polished and intentional.
 - [ ] Every mode has `primaryCommands`.
 - [ ] Every mode has `plannedCommands`.
 - [ ] Every mode has `overviewCards`.
+
+Command symbol checklist:
+
+- [ ] Preserve the fun/professional symbols from the ZIP/reference for modes and commands.
+- [ ] Add command metadata for symbols/icons separately from command names, so Telegram command names remain lowercase ASCII.
+- [ ] Use symbols in bot messages, inline keyboards, mode summaries, dashboard chips, and settings cards where they improve clarity.
+- [ ] Do not put emojis inside actual Telegram command names.
+- [ ] Do not use playful symbols in errors, authorization failures, destructive actions, or financial amounts where precision matters.
 
 Command safety checklist:
 
@@ -987,6 +998,7 @@ Exact files to change, in order:
 Command behavior:
 
 - [ ] `/mode` shows current mode, all available modes, and suggested commands.
+- [ ] `/mode` shows each mode with its emoji/symbol, tagline, and short description.
 - [ ] `/mode classic` sets Classic mode.
 - [ ] `/mode roomies` sets Roomies mode.
 - [ ] `/mode buds` sets Buds mode.
@@ -1052,6 +1064,7 @@ Implementation checklist:
 - [ ] Create a helper that builds mode-aware help text from mode definitions.
 - [ ] `/start` becomes concise and shows current Crib mode.
 - [ ] `/help` shows base commands plus “Best for this mode.”
+- [ ] `/help` uses command symbols/icons from mode metadata without changing official command names.
 - [ ] Keep full command menu stable; do not remove commands from BotFather menu.
 - [ ] Do not use playful tone for errors, authorization failures, destructive actions, or payment amounts.
 
@@ -1275,6 +1288,7 @@ Exact files to change, in order:
 Checklist:
 
 - [ ] Add mode names.
+- [ ] Add mode emojis/symbol labels where localization needs surrounding copy.
 - [ ] Add mode descriptions.
 - [ ] Add `/mode` responses.
 - [ ] Add mode-aware `/start` responses.
