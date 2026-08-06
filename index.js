@@ -21,6 +21,7 @@ const localeFor = (ctx) => store.resolveLocale(ctx.chat.id, ctx.from, { groupMes
 const money = (cents, currency = 'USD', locale = 'en') => formatCurrency(locale, cents, currency);
 const dashboardKeyboard = (ctx, view, locale = 'en') => dashboardReplyMarkup(process.env, { chatId: ctx.chat.id, chatType: ctx.chat.type, botUsername: ctx.me, view, text: t(locale, 'dashboard.open') });
 const languageKeyboard = { inline_keyboard: [[{ text: 'English', callback_data: 'language:en' }, { text: 'Français', callback_data: 'language:fr' }, { text: 'العربية', callback_data: 'language:ar' }]] };
+const expenseLine = (expense, currency, locale) => `${money(expense.amountCents, currency, locale)} - ${expense.description}\nPaid by ${expense.paidBy}`;
 
 bot.use(async (ctx, next) => {
   if (!store.markUpdate(ctx.update?.update_id)) return;
@@ -36,17 +37,24 @@ function saveExpense(ctx, details, source = 'telegram') {
   if (!participants?.length) participants = store.memberNames(ctx.chat.id);
   if (details.excluded) participants = participants.filter((name) => name.toLowerCase() !== details.excluded.toLowerCase());
   const expense = store.addExpense(ctx.chat.id, { ...details, participants }, actor, source); const currency = store.settings(ctx.chat.id).currency; const locale = localeFor(ctx);
-  return ctx.reply(t(locale, 'expenses.added', { description: expense.description, amount: money(expense.amountCents, currency, locale), payer: expense.paidBy, participants: expense.participants.join(', ') || expense.paidBy }));
+  return ctx.reply(`Logged\n${expenseLine(expense, currency, locale)}`);
 }
 
 bot.command('split', (ctx) => { const locale = localeFor(ctx); const parts = ctx.message.text.trim().split(/\s+/); if (parts.length < 3) return ctx.reply(t(locale, 'expenses.format')); const amount = Number(parts[1].replace(',', '.')); const description = parts.slice(2).join(' ').trim(); if (!Number.isFinite(amount) || amount <= 0 || !description) return ctx.reply(t(locale, 'expenses.format')); return saveExpense(ctx, { amount, description, paidBy: actorName(ctx) }); });
-bot.command('balance', (ctx) => {
+function balanceReply(ctx) {
   const locale = localeFor(ctx); const data = store.dashboard(ctx.chat.id); if (!data.expenses.length) return ctx.reply(t(locale, 'expenses.noLogged'));
   const viewer = actorName(ctx); const cents = data.balances.netCents[Object.keys(data.balances.netCents).find((n) => n.toLowerCase() === viewer.toLowerCase())] || 0; const owed = Math.max(cents, 0), owe = Math.max(-cents, 0); const currency = data.settings.currency;
-  let message = `${t(locale, 'balance.title')}\n\n${t(locale, 'balance.youAreOwed', { amount: money(owed, currency, locale) })}\n${t(locale, 'balance.youOwe', { amount: money(owe, currency, locale) })}\n\n`;
-  const related = data.balances.settlements.filter((s) => s.from.toLowerCase() === viewer.toLowerCase() || s.to.toLowerCase() === viewer.toLowerCase()); message += related.length ? related.map((s) => t(locale, 'balance.transfer', { from: s.from, to: s.to, amount: money(s.amountCents, currency, locale) })).join('\n') : t(locale, 'balance.settled');
+  const paid = Object.entries(data.balances.paidCents).map(([name, amount]) => `${name}: ${money(amount, currency, locale)}`).join('\n');
+  let message = `Balance\nSpent: ${money(data.balances.totalSpentCents, currency, locale)}\nYou are owed: ${money(owed, currency, locale)}\nYou owe: ${money(owe, currency, locale)}`;
+  if (paid) message += `\n\nPaid\n${paid}`;
+  message += `\n\nSettle\n${data.balances.settlements.length ? data.balances.settlements.map((s) => `${s.from} should pay ${s.to} ${money(s.amountCents, currency, locale)}`).join('\n') : 'Everyone is settled.'}`;
   return ctx.reply(message, { reply_markup: dashboardKeyboard(ctx, 'expenses', locale) });
-});
+}
+bot.command('balance', balanceReply);
+bot.command('settle', balanceReply);
+bot.command('last', (ctx) => { const locale = localeFor(ctx); const expense = store.lastExpense(ctx.chat.id); if (!expense) return ctx.reply(t(locale, 'expenses.noLogged')); const currency = store.settings(ctx.chat.id).currency; return ctx.reply(`Last expense\n${expense.id}\n${expenseLine(expense, currency, locale)}`); });
+bot.command('undo', (ctx) => { const locale = localeFor(ctx); const expense = store.voidExpense(ctx.chat.id, null, actorName(ctx), 'undo'); if (!expense) return ctx.reply(t(locale, 'expenses.noLogged')); const currency = store.settings(ctx.chat.id).currency; return ctx.reply(`Undone\n${expense.description}\n${money(expense.amountCents, currency, locale)} removed from balance.`); });
+bot.command('void', (ctx) => { const locale = localeFor(ctx); const id = ctx.message.text.replace(/^\/void(?:@\w+)?\s*/i, '').trim(); if (!id) return ctx.reply('Format: /void <expense-id>'); const expense = store.voidExpense(ctx.chat.id, id, actorName(ctx)); if (!expense) return ctx.reply('Expense not found. Use /last to see the latest ID.'); const currency = store.settings(ctx.chat.id).currency; return ctx.reply(`Voided\n${expense.description}\n${money(expense.amountCents, currency, locale)} removed from balance.`); });
 
 bot.command('chore', (ctx) => {
   const input = ctx.message.text.replace(/^\/chore(?:@\w+)?\s*/i, '').trim(); const [action, ...rest] = input.split(/\s+/); const actor = actorName(ctx);

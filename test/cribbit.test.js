@@ -31,6 +31,20 @@ test('calculates exact cent balances and minimum transfers', () => {
   assert.deepEqual(simplifyDebts({ Alex: 23.5, Sarah: -15.5, Marcus: -8 }).map(({ from, to, amount }) => ({ from, to, amount })), [{ from: 'Sarah', to: 'Alex', amount: 15.5 }, { from: 'Marcus', to: 'Alex', amount: 8 }]);
 });
 
+test('voids and undoes expenses without deleting audit history', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-void-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true })); const store = createStore(path.join(directory, 'data.json'));
+  store.registerMember('123', { id: 1, first_name: 'Alex' }, 'Oak Street'); store.registerMember('123', { id: 2, first_name: 'Maya' }, 'Oak Street');
+  const pizza = store.addExpense('123', { amount: 30, description: 'pizza', paidBy: 'Alex', participants: ['Alex', 'Maya'] }, 'Alex');
+  const snacks = store.addExpense('123', { amount: 10, description: 'snacks', paidBy: 'Maya', participants: ['Alex', 'Maya'] }, 'Maya');
+  assert.equal(store.lastExpense('123').id, snacks.id);
+  assert.equal(store.voidExpense('123', null, 'Alex', 'undo').id, snacks.id);
+  assert.equal(store.lastExpense('123').id, pizza.id);
+  assert.equal(store.voidExpense('123', pizza.id, 'Alex').id, pizza.id);
+  assert.equal(store.activeExpenses('123').length, 0);
+  assert.equal(store.state.expenses['123'].length, 2);
+  assert.equal(store.dashboard('123').expenses.length, 0);
+});
+
 test('parses assigned chores with due labels', () => {
   assert.deepEqual(parseChoreInput('clean kitchen @ken_1'), { task: 'clean kitchen', assignedTo: '@ken_1', dueDate: null });
   assert.deepEqual(parseChoreInput('take out trash @maya Friday'), { task: 'take out trash', assignedTo: '@maya', dueDate: 'friday' });
@@ -137,7 +151,7 @@ test('serves authenticated dashboard data and persistent actions', async (t) => 
 });
 
 test('Telegram command menu includes persistent product areas', () => {
-  const commands = BOT_COMMANDS.map(({ command }) => command); for (const command of ['split', 'balance', 'chore', 'chores', 'dashboard', 'help', 'language']) assert.ok(commands.includes(command)); assert.ok(BOT_COMMANDS.every(({ description }) => description.length > 0 && description.length <= 256));
+  const commands = BOT_COMMANDS.map(({ command }) => command); for (const command of ['split', 'balance', 'settle', 'last', 'undo', 'void', 'chore', 'chores', 'dashboard', 'help', 'language']) assert.ok(commands.includes(command)); assert.ok(BOT_COMMANDS.every(({ description }) => description.length > 0 && description.length <= 256));
 });
 
 test('normalizes supported Telegram locale variants and falls back to English', () => {
@@ -178,7 +192,7 @@ test('parses Arabic expenses and Arabic-Indic numerals', () => {
 });
 
 test('localized command descriptions retain official command names', () => {
-  for (const locale of ['en', 'fr', 'ar']) for (const command of ['split', 'balance', 'chore', 'chores', 'dashboard', 'help', 'language']) assert.ok(commandsForLocale(locale).some((item) => item.command === command));
+  for (const locale of ['en', 'fr', 'ar']) for (const command of ['split', 'balance', 'settle', 'last', 'undo', 'void', 'chore', 'chores', 'dashboard', 'help', 'language']) assert.ok(commandsForLocale(locale).some((item) => item.command === command));
 });
 
 test('Mini App localization applies Arabic RTL and keeps the logo unmirrored', () => {
