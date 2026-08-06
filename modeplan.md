@@ -482,7 +482,526 @@ Exit criteria:
 - Local, GitHub, Railway, Vercel, and Telegram are synchronized.
 - Any unverified item is explicitly listed.
 
-## 6. Data model target
+## 6. Ready-to-execute implementation checklist
+
+Use this checklist when implementation starts. Complete one slice at a time. Do not start the next slice until the current slice is tested, committed, pushed, merged, deployed if applicable, and recorded.
+
+### Slice A — Baseline proof before code changes
+
+Purpose: prove the starting state and prevent source drift.
+
+Exact files to read, in order:
+
+1. `C:\Users\GrowB\cribbit-bot\modeplan.md`
+2. `C:\Users\GrowB\cribbit-bot\plan.md`
+3. `C:\Users\GrowB\cribbit-bot\structure.md`
+4. `C:\Users\GrowB\cribbit-bot\requirements.md`
+5. `C:\Users\GrowB\cribbit-bot\README.md`
+6. `C:\Users\GrowB\cribbit-bot\package.json`
+7. `C:\Users\GrowB\cribbit-bot\index.js`
+8. `C:\Users\GrowB\cribbit-bot\src\store.js`
+9. `C:\Users\GrowB\cribbit-bot\src\bot-commands.js`
+10. `C:\Users\GrowB\cribbit-bot\test\cribbit.test.js`
+11. `C:\Users\GrowB\cribbit-bot\public\app.js`
+12. `C:\Users\GrowB\cribbit-bot\public\app.html`
+13. `C:\Users\GrowB\cribbit-bot\public\styles.css`
+
+Commands:
+
+```powershell
+cd C:\Users\GrowB\cribbit-bot
+git status --short --branch
+git log -1 --oneline
+npm run typecheck
+npm run build
+```
+
+Checklist:
+
+- [ ] Confirm branch is `main...origin/main`.
+- [ ] Confirm only the old extensionless `index` is untracked.
+- [ ] Confirm no source file is modified before implementation starts.
+- [ ] Record current commit SHA in this file under the active slice notes.
+- [ ] Run `npm run typecheck`.
+- [ ] Run `npm run build`.
+
+Stop if:
+
+- local main is not synchronized with origin;
+- more files than the old extensionless `index` are dirty;
+- baseline tests/build fail for a reason unrelated to the planned slice.
+
+### Slice B — Central mode definitions
+
+Purpose: define Crib Modes once so bot, dashboard, tests, and help text cannot drift.
+
+Exact files to change, in order:
+
+1. Add `C:\Users\GrowB\cribbit-bot\src\modes.js`
+2. Edit `C:\Users\GrowB\cribbit-bot\test\cribbit.test.js`
+3. Edit `C:\Users\GrowB\cribbit-bot\modeplan.md`
+
+Expected `src\modes.js` exports:
+
+```js
+const DEFAULT_MODE = 'roomies';
+const MODE_DEFINITIONS = { /* roomies, cubs, nest, twinsoul, colleagues, buddies, crew, guild */ };
+function normalizeMode(value) {}
+function modeDefinition(value) {}
+function modeNames() {}
+function commandsForMode(value) {}
+function isPrimaryModeCommand(mode, command) {}
+module.exports = { DEFAULT_MODE, MODE_DEFINITIONS, normalizeMode, modeDefinition, modeNames, commandsForMode, isPrimaryModeCommand };
+```
+
+Test checklist:
+
+- [ ] `normalizeMode()` returns `roomies` for empty, unknown, null, and invalid values.
+- [ ] Every mode has `key`, `name`, `audience`, `personality`, `primaryCommands`, `overviewCards`, and `tone`.
+- [ ] Every primary command referenced by a mode exists in `BOT_COMMANDS` or is intentionally marked as future.
+- [ ] `commandsForMode('twinsoul')` includes `/date`, `/ours`, and `/mood`.
+- [ ] `commandsForMode('nest')` includes `/pickup`, `/sundayplan`, and `/dinner`.
+
+Commands:
+
+```powershell
+npm run typecheck
+npm run build
+git diff --check
+```
+
+Do not change yet:
+
+- `index.js`
+- `src\store.js`
+- `src\bot-commands.js`
+- dashboard UI files
+
+Exit criteria:
+
+- `src\modes.js` exists.
+- Tests pass.
+- No runtime behavior changes yet.
+
+### Slice C — Persist `settings.cribMode`
+
+Purpose: make Crib Mode durable in the shared store without exposing UI yet.
+
+Exact files to change, in order:
+
+1. Edit `C:\Users\GrowB\cribbit-bot\src\store.js`
+2. Edit `C:\Users\GrowB\cribbit-bot\test\cribbit.test.js`
+3. Edit `C:\Users\GrowB\cribbit-bot\modeplan.md`
+
+Store changes:
+
+- [ ] Import `DEFAULT_MODE` and `normalizeMode` from `src\modes.js`.
+- [ ] Add `cribMode: DEFAULT_MODE` to `defaultSettings()`.
+- [ ] In `settings(chatId, houseName)`, normalize existing `state.settings[chatId].cribMode`.
+- [ ] Add `cribMode` to `updateSettings()` allowed keys.
+- [ ] Ensure invalid saved values normalize to `roomies`.
+- [ ] Keep existing `quietHours`, `houseRules`, and `partyMode` behavior intact.
+
+Test checklist:
+
+- [ ] New stores default to `cribMode: "roomies"`.
+- [ ] Updating settings with `{ cribMode: "nest" }` persists.
+- [ ] Reloading the store preserves `cribMode`.
+- [ ] Invalid stored mode reloads as `roomies`.
+- [ ] `dashboard(chatId).settings.cribMode` is present.
+
+Commands:
+
+```powershell
+npm run typecheck
+npm run build
+git diff --check
+```
+
+Exit criteria:
+
+- Mode is stored per Crib.
+- No command menu change yet.
+
+### Slice D — Add `/mode` command and command-menu sync
+
+Purpose: expose mode control in Telegram only after persistence exists.
+
+Exact files to change, in order:
+
+1. Edit `C:\Users\GrowB\cribbit-bot\src\bot-commands.js`
+2. Edit `C:\Users\GrowB\cribbit-bot\index.js`
+3. Edit `C:\Users\GrowB\cribbit-bot\locales\en.json`
+4. Edit `C:\Users\GrowB\cribbit-bot\locales\fr.json`
+5. Edit `C:\Users\GrowB\cribbit-bot\locales\ar.json`
+6. Edit `C:\Users\GrowB\cribbit-bot\public\locales\en.json`
+7. Edit `C:\Users\GrowB\cribbit-bot\public\locales\fr.json`
+8. Edit `C:\Users\GrowB\cribbit-bot\public\locales\ar.json`
+9. Edit `C:\Users\GrowB\cribbit-bot\test\cribbit.test.js`
+10. Edit `C:\Users\GrowB\cribbit-bot\modeplan.md`
+
+Command behavior:
+
+- [ ] `/mode` shows current mode, all available modes, and suggested commands.
+- [ ] `/mode roomies` sets Roomies mode.
+- [ ] `/mode cubs` sets Cubs mode.
+- [ ] `/mode nest` sets Nest mode.
+- [ ] `/mode twinsoul` sets TwinSoul mode.
+- [ ] `/mode colleagues` sets Colleagues mode.
+- [ ] `/mode buddies` sets Buddies mode.
+- [ ] `/mode crew` sets Crew mode.
+- [ ] `/mode guild` sets Guild mode.
+- [ ] Invalid values show a helpful list and do not change settings.
+- [ ] In groups, only owner/admin can change mode.
+- [ ] In groups, non-admin users can still run `/mode` read-only.
+- [ ] In private chat, `/mode` explains mode is per Crib and prompts opening a group/dashboard if no Crib context is selected.
+
+Tests:
+
+- [ ] `BOT_COMMANDS` includes `mode`.
+- [ ] Existing test proving every advertised command has a handler still passes.
+- [ ] `/mode` handler exists.
+- [ ] Mode descriptions exist in English/French/Arabic locale dictionaries.
+- [ ] Missing translation test still passes.
+
+Commands:
+
+```powershell
+npm run typecheck
+npm run build
+git diff --check
+```
+
+Deployment verification after merge:
+
+- [ ] Telegram `getMyCommands` returns the same count for default, `en`, `fr`, and `ar`.
+- [ ] `/mode` in Telegram does not hit unknown-command fallback.
+- [ ] `/mode nest` persists and `/mode` shows Nest afterward.
+
+Exit criteria:
+
+- `/mode` is advertised and handled in the same release.
+- No command-menu drift is introduced.
+
+### Slice E — Mode-aware `/start` and `/help`
+
+Purpose: make the bot feel mode-aware without changing core business logic.
+
+Exact files to change, in order:
+
+1. Edit `C:\Users\GrowB\cribbit-bot\index.js`
+2. Edit `C:\Users\GrowB\cribbit-bot\src\modes.js`
+3. Edit `C:\Users\GrowB\cribbit-bot\locales\en.json`
+4. Edit `C:\Users\GrowB\cribbit-bot\locales\fr.json`
+5. Edit `C:\Users\GrowB\cribbit-bot\locales\ar.json`
+6. Edit `C:\Users\GrowB\cribbit-bot\public\locales\en.json`
+7. Edit `C:\Users\GrowB\cribbit-bot\public\locales\fr.json`
+8. Edit `C:\Users\GrowB\cribbit-bot\public\locales\ar.json`
+9. Edit `C:\Users\GrowB\cribbit-bot\test\cribbit.test.js`
+10. Edit `C:\Users\GrowB\cribbit-bot\modeplan.md`
+
+Implementation checklist:
+
+- [ ] Create a helper that builds mode-aware help text from mode definitions.
+- [ ] `/start` becomes concise and shows current Crib mode.
+- [ ] `/help` shows base commands plus “Best for this mode.”
+- [ ] Keep full command menu stable; do not remove commands from BotFather menu.
+- [ ] Do not use playful tone for errors, authorization failures, destructive actions, or payment amounts.
+
+Tests:
+
+- [ ] `/help` content includes current mode name.
+- [ ] Roomies help suggests `/split`, `/chore`, `/groceries`.
+- [ ] TwinSoul help suggests `/date`, `/ours`, `/mood`.
+- [ ] Nest help suggests `/pickup`, `/dinner`, `/sundayplan`.
+- [ ] Colleagues help suggests `/corrections`, `/confirm`, `/reject`.
+
+Commands:
+
+```powershell
+npm run typecheck
+npm run build
+git diff --check
+```
+
+Exit criteria:
+
+- Help/start text is generated from source definitions, not hand-copied divergent lists.
+
+### Slice F — Dashboard Settings mode selector
+
+Purpose: allow mode viewing/changing from the Mini App/web dashboard.
+
+Exact files to change, in order:
+
+1. Edit `C:\Users\GrowB\cribbit-bot\public\app.html`
+2. Edit `C:\Users\GrowB\cribbit-bot\public\app.js`
+3. Edit `C:\Users\GrowB\cribbit-bot\public\styles.css`
+4. Edit `C:\Users\GrowB\cribbit-bot\public\locales\en.json`
+5. Edit `C:\Users\GrowB\cribbit-bot\public\locales\fr.json`
+6. Edit `C:\Users\GrowB\cribbit-bot\public\locales\ar.json`
+7. Edit `C:\Users\GrowB\cribbit-bot\test\cribbit.test.js`
+8. Edit `C:\Users\GrowB\cribbit-bot\modeplan.md`
+
+Implementation checklist:
+
+- [ ] Add mode selector to Settings view.
+- [ ] Show mode name and description near the Crib/house settings.
+- [ ] Save through existing `settings.update` API.
+- [ ] Refresh dashboard state after save.
+- [ ] Show mode command chips or quick suggestions.
+- [ ] Preserve demo-mode behavior.
+- [ ] Preserve Mini App Telegram authentication.
+- [ ] Preserve mobile layout at 375px and 390px.
+
+Tests:
+
+- [ ] Dashboard payload includes `settings.cribMode`.
+- [ ] Settings update accepts `cribMode`.
+- [ ] Invalid mode cannot be saved through API.
+- [ ] Existing settings tests still pass.
+
+Commands:
+
+```powershell
+npm run typecheck
+npm run build
+git diff --check
+```
+
+Manual visual checks:
+
+- [ ] Desktop Settings shows selector.
+- [ ] Mobile Settings shows selector without overflow.
+- [ ] Switching mode updates UI after save.
+
+Exit criteria:
+
+- Mode can be changed from Telegram and dashboard.
+
+### Slice G — Mode-aware overview cards
+
+Purpose: make the dashboard visibly adapt to the selected Crib Mode.
+
+Exact files to change, in order:
+
+1. Edit `C:\Users\GrowB\cribbit-bot\src\modes.js`
+2. Edit `C:\Users\GrowB\cribbit-bot\public\app.js`
+3. Edit `C:\Users\GrowB\cribbit-bot\public\styles.css`
+4. Edit `C:\Users\GrowB\cribbit-bot\public\locales\en.json`
+5. Edit `C:\Users\GrowB\cribbit-bot\public\locales\fr.json`
+6. Edit `C:\Users\GrowB\cribbit-bot\public\locales\ar.json`
+7. Edit `C:\Users\GrowB\cribbit-bot\test\cribbit.test.js`
+8. Edit `C:\Users\GrowB\cribbit-bot\modeplan.md`
+
+Implementation checklist:
+
+- [ ] Keep balance cards visible in every mode.
+- [ ] Roomies emphasizes chores, groceries, rules.
+- [ ] Cubs emphasizes party, tab, ding, funds.
+- [ ] Nest emphasizes dinner, pickup, groceries, quiet hours.
+- [ ] TwinSoul emphasizes date, mood, ours, dinner.
+- [ ] Colleagues emphasizes corrections, weekly plan, activity.
+- [ ] Buddies emphasizes event plan, tab, ding, funds.
+- [ ] Crew emphasizes plan, funds, tab, corrections.
+- [ ] Guild emphasizes quests/plans, tab, party, mood.
+- [ ] Avoid duplicating mode definitions separately in backend and frontend.
+
+Tests:
+
+- [ ] Each mode has overview card definitions.
+- [ ] Unknown mode falls back to Roomies card definitions.
+- [ ] Dashboard route still serves required assets.
+
+Commands:
+
+```powershell
+npm run typecheck
+npm run build
+git diff --check
+```
+
+Manual visual checks:
+
+- [ ] `/app?demo=1` renders mode sections.
+- [ ] Mobile balance cards remain aligned.
+- [ ] Bottom nav still works.
+
+Exit criteria:
+
+- Dashboard visibly matches the selected mode.
+- No second app route or duplicate dashboard is created.
+
+### Slice H — Mode command polish
+
+Purpose: upgrade current lightweight note-style commands into richer mode features.
+
+Implement one command per PR unless the diff is tiny and tightly coupled.
+
+Recommended order and exact files:
+
+1. `/pickup`
+   - `C:\Users\GrowB\cribbit-bot\src\store.js`
+   - `C:\Users\GrowB\cribbit-bot\index.js`
+   - `C:\Users\GrowB\cribbit-bot\test\cribbit.test.js`
+   - `C:\Users\GrowB\cribbit-bot\public\app.js`
+   - `C:\Users\GrowB\cribbit-bot\modeplan.md`
+2. `/date`
+   - `C:\Users\GrowB\cribbit-bot\src\store.js`
+   - `C:\Users\GrowB\cribbit-bot\index.js`
+   - `C:\Users\GrowB\cribbit-bot\test\cribbit.test.js`
+   - `C:\Users\GrowB\cribbit-bot\public\app.js`
+   - `C:\Users\GrowB\cribbit-bot\modeplan.md`
+3. `/mood`
+   - `C:\Users\GrowB\cribbit-bot\src\store.js`
+   - `C:\Users\GrowB\cribbit-bot\index.js`
+   - `C:\Users\GrowB\cribbit-bot\test\cribbit.test.js`
+   - `C:\Users\GrowB\cribbit-bot\public\app.js`
+   - `C:\Users\GrowB\cribbit-bot\modeplan.md`
+4. `/dinner`
+   - `C:\Users\GrowB\cribbit-bot\src\store.js`
+   - `C:\Users\GrowB\cribbit-bot\index.js`
+   - `C:\Users\GrowB\cribbit-bot\test\cribbit.test.js`
+   - `C:\Users\GrowB\cribbit-bot\public\app.js`
+   - `C:\Users\GrowB\cribbit-bot\modeplan.md`
+5. `/party`
+   - `C:\Users\GrowB\cribbit-bot\src\store.js`
+   - `C:\Users\GrowB\cribbit-bot\index.js`
+   - `C:\Users\GrowB\cribbit-bot\test\cribbit.test.js`
+   - `C:\Users\GrowB\cribbit-bot\public\app.js`
+   - `C:\Users\GrowB\cribbit-bot\modeplan.md`
+6. `/tab`
+   - `C:\Users\GrowB\cribbit-bot\src\store.js`
+   - `C:\Users\GrowB\cribbit-bot\index.js`
+   - `C:\Users\GrowB\cribbit-bot\test\cribbit.test.js`
+   - `C:\Users\GrowB\cribbit-bot\public\app.js`
+   - `C:\Users\GrowB\cribbit-bot\modeplan.md`
+7. `/corrections`
+   - `C:\Users\GrowB\cribbit-bot\src\store.js`
+   - `C:\Users\GrowB\cribbit-bot\index.js`
+   - `C:\Users\GrowB\cribbit-bot\test\cribbit.test.js`
+   - `C:\Users\GrowB\cribbit-bot\public\app.js`
+   - `C:\Users\GrowB\cribbit-bot\modeplan.md`
+
+Each command polish PR must include:
+
+- [ ] parse rules;
+- [ ] list behavior;
+- [ ] create/update behavior;
+- [ ] persistence test;
+- [ ] bot handler test or handler coverage test;
+- [ ] dashboard display if relevant;
+- [ ] `/help` or mode suggestion update if command usage changes.
+
+Commands:
+
+```powershell
+npm run typecheck
+npm run build
+git diff --check
+```
+
+Exit criteria:
+
+- The command stores structured data, not only free-text notes.
+- Bot and dashboard read the same data.
+
+### Slice I — Localization pass
+
+Purpose: remove hard-coded English from mode UX once the behavior stabilizes.
+
+Exact files to change, in order:
+
+1. Edit `C:\Users\GrowB\cribbit-bot\locales\en.json`
+2. Edit `C:\Users\GrowB\cribbit-bot\locales\fr.json`
+3. Edit `C:\Users\GrowB\cribbit-bot\locales\ar.json`
+4. Edit `C:\Users\GrowB\cribbit-bot\public\locales\en.json`
+5. Edit `C:\Users\GrowB\cribbit-bot\public\locales\fr.json`
+6. Edit `C:\Users\GrowB\cribbit-bot\public\locales\ar.json`
+7. Edit `C:\Users\GrowB\cribbit-bot\src\i18n.js` only if needed.
+8. Edit `C:\Users\GrowB\cribbit-bot\public\i18n.js` only if needed.
+9. Edit `C:\Users\GrowB\cribbit-bot\test\cribbit.test.js`
+10. Edit `C:\Users\GrowB\cribbit-bot\modeplan.md`
+
+Checklist:
+
+- [ ] Add mode names.
+- [ ] Add mode descriptions.
+- [ ] Add `/mode` responses.
+- [ ] Add mode-aware `/start` responses.
+- [ ] Add mode-aware `/help` labels.
+- [ ] Add dashboard selector labels.
+- [ ] Verify command names stay untranslated and lowercase.
+- [ ] Verify Arabic RTL and logo behavior.
+
+Commands:
+
+```powershell
+npm run typecheck
+npm run build
+git diff --check
+```
+
+Exit criteria:
+
+- Missing translation test passes.
+- English/French/Arabic all show coherent mode UX.
+
+### Slice J — Deployment and live acceptance
+
+Purpose: synchronize everything and prove the feature is live.
+
+Exact files to update before release is called done:
+
+1. `C:\Users\GrowB\cribbit-bot\modeplan.md`
+2. `C:\Users\GrowB\cribbit-bot\plan.md`
+3. `C:\Users\GrowB\cribbit-bot\README.md`
+4. `C:\Users\GrowB\cribbit-bot\requirements.md`
+5. `C:\Users\GrowB\cribbit-bot\structure.md`
+
+Release checklist:
+
+- [ ] `git status --short --branch`
+- [ ] `git log -1 --oneline`
+- [ ] `npm run typecheck`
+- [ ] `npm run build`
+- [ ] `git diff --check`
+- [ ] Push branch.
+- [ ] Open PR.
+- [ ] Verify PR checks or record GitHub infrastructure failure honestly.
+- [ ] Merge PR.
+- [ ] Confirm local `main...origin/main`.
+- [ ] Confirm Railway `/health`.
+- [ ] Confirm Vercel `/app`.
+- [ ] Confirm Telegram `getMyCommands` if command menu changed.
+- [ ] User manually tests `/mode`.
+- [ ] User manually tests one mode switch.
+- [ ] User manually tests one mode-specific command.
+
+Evidence block to fill:
+
+```text
+Slice:
+Starting commit:
+Local commit:
+PR:
+Merge commit:
+Files changed:
+npm run typecheck:
+npm run build:
+git diff --check:
+Vercel:
+Railway:
+Telegram commands:
+Manual Telegram test:
+Known unverified items:
+```
+
+Exit criteria:
+
+- Source of truth, GitHub, Vercel, Railway, and Telegram are either verified synchronized or the exact unverified item is recorded.
+
+## 7. Data model target
 
 Expected settings shape:
 
@@ -511,7 +1030,7 @@ Mode-specific records should reuse existing durable buckets where possible:
 
 Do not create a second database or mode-specific store unless the existing JSON model is proven insufficient.
 
-## 7. Command menu rule
+## 8. Command menu rule
 
 Never add a command to `src/bot-commands.js` unless the same PR also:
 
@@ -522,7 +1041,7 @@ Never add a command to `src/bot-commands.js` unless the same PR also:
 
 The regression test must keep proving every `BOT_COMMANDS` entry has a registered handler.
 
-## 8. Suggested fun extras backlog
+## 9. Suggested fun extras backlog
 
 Do not implement these until core modes are stable:
 
@@ -537,7 +1056,7 @@ Do not implement these until core modes are stable:
 - `Family command center`: Nest dashboard layout for dinner, pickups, groceries, chores.
 - `TwinSoul rituals`: recurring date/mood/dinner reminders.
 
-## 9. Stop conditions
+## 10. Stop conditions
 
 Stop and report before continuing if:
 
