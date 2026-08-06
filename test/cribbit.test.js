@@ -151,7 +151,10 @@ test('serves authenticated dashboard data and persistent actions', async (t) => 
 });
 
 test('Telegram command menu includes persistent product areas', () => {
-  const commands = BOT_COMMANDS.map(({ command }) => command); for (const command of ['split', 'balance', 'settle', 'last', 'undo', 'void', 'chore', 'chores', 'dashboard', 'help', 'language']) assert.ok(commands.includes(command)); assert.ok(BOT_COMMANDS.every(({ description }) => description.length > 0 && description.length <= 256));
+  const expectedCommands = ['start', 'help', 'setup', 'split', 'balance', 'settle', 'undo', 'void', 'last', 'chore', 'chores', 'done', 'grocery', 'groceries', 'fundme', 'chipin', 'funds', 'corrections', 'confirm', 'reject', 'roomies', 'activity', 'settings', 'dashboard', 'language', 'houserules', 'quiethours', 'party', 'tab', 'ding', 'dinner', 'sundayplan', 'pickup', 'date', 'ours', 'mood'];
+  assert.deepEqual(BOT_COMMANDS.map(({ command }) => command), expectedCommands);
+  for (const locale of ['en', 'fr', 'ar']) assert.deepEqual(commandsForLocale(locale).map(({ command }) => command), expectedCommands);
+  assert.ok(BOT_COMMANDS.every(({ description }) => description.length > 0 && description.length <= 256));
 });
 
 test('normalizes supported Telegram locale variants and falls back to English', () => {
@@ -192,7 +195,7 @@ test('parses Arabic expenses and Arabic-Indic numerals', () => {
 });
 
 test('localized command descriptions retain official command names', () => {
-  for (const locale of ['en', 'fr', 'ar']) for (const command of ['split', 'balance', 'settle', 'last', 'undo', 'void', 'chore', 'chores', 'dashboard', 'help', 'language']) assert.ok(commandsForLocale(locale).some((item) => item.command === command));
+  for (const locale of ['en', 'fr', 'ar']) for (const command of ['split', 'balance', 'settle', 'last', 'undo', 'void', 'chore', 'chores', 'fundme', 'chipin', 'houserules', 'quiethours', 'dashboard', 'help', 'language']) assert.ok(commandsForLocale(locale).some((item) => item.command === command));
 });
 
 test('Mini App localization applies Arabic RTL and keeps the logo unmirrored', () => {

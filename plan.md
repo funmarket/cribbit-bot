@@ -51,6 +51,7 @@ Application work must begin from a freshly recorded Git status and commit. At th
 ### P1 — High
 
 - Telegram privacy mode is enabled. Ordinary natural-language group messages may not be delivered unless Cribbit is an administrator, privacy mode is disabled, or users explicitly address/reply to the bot.
+- Telegram command definitions drifted: BotFather/default commands were manually updated to the full product list, but `src/bot-commands.js` and Telegram language-specific scopes (`en`, `fr`, `ar`) still used the old shorter list.
 - Expense and chore submit handlers use `event.currentTarget` after `await`; it becomes `null`, reset throws, and the modal stays open after a successful save.
 - Multiple-Crib persistence and switching are implemented and browser-verified locally; production publication and live Telegram verification are still pending.
 - Telegram Main Mini App, blue menu button, `/dashboard`, `/app`, and `/dashboard` alias must all be verified as consistent launch paths.
@@ -120,6 +121,30 @@ Status: **Pending after Phase 0**
 - Tests reproduce the group button and modal failures before their fixes.
 - Username-suffixed routing is proven rather than assumed.
 - Production polling and ports are not needed to run handler tests.
+
+## Command menu synchronization hotfix
+
+Status: **Tested locally; publish pending**
+
+### Root cause
+
+Telegram can return different slash-command menus by command scope and language code. The live default scope had the manually added full command list, but the code-owned `en`, `fr`, and `ar` language scopes still synchronized the old 18-command list on bot startup.
+
+### Tasks
+
+- [x] Make `src/bot-commands.js` define the full BotFather command list once.
+- [x] Use that same command order for default, English, French, and Arabic Telegram scopes.
+- [x] Update `/help` text in bot and public locale files so it does not contradict the command menu.
+- [x] Add a regression test proving default and localized command lists stay identical.
+- [x] Run local verification.
+- [ ] Commit and merge the fix from the local source of truth.
+- [ ] Let Railway deploy the same Git commit.
+- [ ] Verify Telegram `getMyCommands` for default, `en`, `fr`, and `ar` all return the same full list.
+
+### Exit criteria
+
+- Telegram slash-command menus no longer show the stale 18-command list for English, French, or Arabic users.
+- The local source of truth, GitHub, Railway runtime, and Telegram command scopes all match the same command list.
 
 ## Phase 2 — Fix Telegram group commands and dashboard launching
 
