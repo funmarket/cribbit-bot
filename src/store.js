@@ -83,6 +83,17 @@ function createStore(dataFile) {
     list('expenses', chatId).push(expense); state.members[chatId] = uniqueNames([...memberNames(chatId), actor, expense.paidBy]);
     addActivity(chatId, 'expense.created', `${actor} added ${expense.description}`, actor, { expenseId: expense.id, amountCents: expense.amountCents }); save(); return expense;
   }
+  function activeExpenses(chatId) { return list('expenses', chatId).filter((expense) => !expense.deletedAt && expense.status !== 'void'); }
+  function lastExpense(chatId) { return activeExpenses(chatId).at(-1) || null; }
+  function findExpense(chatId, identifier) {
+    const expenses = activeExpenses(chatId); const index = Number(identifier);
+    return expenses.find((expense) => expense.id === identifier) || (Number.isInteger(index) && index > 0 ? expenses[index - 1] : null);
+  }
+  function voidExpense(chatId, identifier, actor, reason = 'voided') {
+    const expense = identifier ? findExpense(chatId, identifier) : lastExpense(chatId); if (!expense) return null;
+    expense.status = 'void'; expense.deletedAt = now(); expense.voidedBy = actor; expense.voidReason = reason; expense.updatedAt = now();
+    addActivity(chatId, 'expense.voided', `${actor} voided ${expense.description}`, actor, { expenseId: expense.id }); save(); return expense;
+  }
   function addChore(chatId, details, actor) {
     const chore = { id: makeId('c'), task: String(details.task).trim().slice(0, 160), description: String(details.description || '').trim().slice(0, 500), assignedTo: details.assignedTo || null, addedBy: actor, dueDate: details.dueDate || null, recurrence: details.recurrence || 'one-time', priority: details.priority || 'normal', done: false, createdAt: now(), updatedAt: now() };
     list('chores', chatId).push(chore); addActivity(chatId, 'chore.created', `${actor} added “${chore.task}”`, actor, { choreId: chore.id }); save(); return chore;
@@ -120,13 +131,13 @@ function createStore(dataFile) {
     current.updatedAt = now(); addActivity(chatId, 'settings.updated', `${actor} updated house settings`, actor); save(); return current;
   }
   function dashboard(chatId, viewer) {
-    const expenses = list('expenses', chatId); const chores = list('chores', chatId); const groceries = list('groceries', chatId); const members = list('memberProfiles', chatId); const balances = calculateBalances(expenses, memberNames(chatId));
+    const expenses = activeExpenses(chatId); const chores = list('chores', chatId); const groceries = list('groceries', chatId); const members = list('memberProfiles', chatId); const balances = calculateBalances(expenses, memberNames(chatId));
     const locale = viewer?.telegramId ? resolveLocale(chatId, { id: viewer.telegramId, language_code: viewer.telegramLanguageCode }) : settings(chatId).defaultLocale;
     return { expenses, chores, groceries, members, activity: list('activity', chatId), settings: settings(chatId), balances, viewer: viewer ? { ...viewer, locale } : null, locale };
   }
   function markUpdate(updateId) { if (updateId == null) return true; if (state.processedUpdates[updateId]) return false; state.processedUpdates[updateId] = now(); const ids = Object.keys(state.processedUpdates); if (ids.length > 1000) ids.slice(0, ids.length - 1000).forEach((id) => delete state.processedUpdates[id]); save(); return true; }
   function clear(chatId) { for (const key of ['expenses', 'chores', 'members', 'memberProfiles', 'groceries', 'activity', 'settings']) state[key][chatId] = key === 'settings' ? defaultSettings() : []; save(); }
-  return { state, save, registerMember, isMember, memberByTelegramId, housesForTelegramId, activeChatId, setActiveChatId, clearActiveChatId, memberNames, addExpense, addChore, findChore, updateChore, deleteChore, addGrocery, updateGrocery, deleteGrocery, updateSettings, dashboard, addActivity, markUpdate, clear, settings, userLocale, setUserLocale, resolveLocale };
+  return { state, save, registerMember, isMember, memberByTelegramId, housesForTelegramId, activeChatId, setActiveChatId, clearActiveChatId, memberNames, addExpense, activeExpenses, lastExpense, findExpense, voidExpense, addChore, findChore, updateChore, deleteChore, addGrocery, updateGrocery, deleteGrocery, updateSettings, dashboard, addActivity, markUpdate, clear, settings, userLocale, setUserLocale, resolveLocale };
 }
 
 module.exports = { createStore, defaultSettings };
