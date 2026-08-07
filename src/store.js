@@ -3,18 +3,19 @@ const { calculateBalances } = require('./balances');
 const { cleanName, createExpense, uniqueNames } = require('./expenses');
 const { normalizeLocale } = require('./i18n');
 const { DEFAULT_MODE, normalizeMode } = require('./modes');
+const { dashboardModePicker } = require('./mode-picker');
 
 const now = () => new Date().toISOString();
 const makeId = (prefix) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 const defaultSettings = (houseName = 'My Crib') => ({ houseName, currency: 'USD', timezone: 'UTC', notifications: true, weeklyDigest: true, quietHours: '', houseRules: '', partyMode: false, defaultLocale: 'en', cribMode: DEFAULT_MODE });
 
-function createStore(dataFile) {
-  const state = { expenses: {}, chores: {}, members: {}, memberProfiles: {}, groceries: {}, funds: {}, corrections: {}, notes: {}, activity: {}, settings: {}, processedUpdates: {}, userPreferences: {} };
+function createJsonStore(dataFile) {
+  const state = { expenses: {}, chores: {}, members: {}, memberProfiles: {}, groceries: {}, funds: {}, corrections: {}, notes: {}, plans: {}, activity: {}, settings: {}, processedUpdates: {}, userPreferences: {} };
   if (fs.existsSync(dataFile)) {
     try { Object.assign(state, JSON.parse(fs.readFileSync(dataFile, 'utf8'))); }
     catch (error) { console.error(`Could not read ${dataFile}; starting with empty data.`, error); }
   }
-  for (const key of ['expenses', 'chores', 'members', 'memberProfiles', 'groceries', 'funds', 'corrections', 'notes', 'activity', 'settings', 'processedUpdates', 'userPreferences']) state[key] ||= {};
+  for (const key of ['expenses', 'chores', 'members', 'memberProfiles', 'groceries', 'funds', 'corrections', 'notes', 'plans', 'activity', 'settings', 'processedUpdates', 'userPreferences']) state[key] ||= {};
 
   function save() {
     const temporaryFile = `${dataFile}.tmp`;
@@ -90,6 +91,50 @@ function createStore(dataFile) {
     const expense = createExpense({ ...details, addedBy: actor, participants: details.participants?.length ? details.participants : memberNames(chatId), source });
     list('expenses', chatId).push(expense); state.members[chatId] = uniqueNames([...memberNames(chatId), actor, expense.paidBy]);
     addActivity(chatId, 'expense.created', `${actor} added ${expense.description}`, actor, { expenseId: expense.id, amountCents: expense.amountCents }); save(); return expense;
+  }
+  function findPlan(chatId, identifier) { const plans = list('plans', chatId); const index = Number(identifier); return plans.find((plan) => plan.id === identifier) || (Number.isInteger(index) && index > 0 ? plans[index - 1] : null); }
+  function normalizeBringItem(item, index) { return { id: item.id || makeId('pi'), name: String(item.name || item).trim().slice(0, 120), quantity: String(item.quantity || '').trim().slice(0, 30), notes: String(item.notes || '').trim().slice(0, 160), claimedBy: item.claimedBy || null, claimedById: item.claimedById || null, claimedAt: item.claimedAt || null, status: item.status || (item.claimedBy ? 'claimed' : 'open') }; }
+  function planParticipant(member) { return { memberId: member?.id || null, telegramId: member?.telegramId || null, displayName: cleanName(member?.displayName || 'Unknown'), joinedAt: now(), status: 'joined' }; }
+  function samePlanMember(participant, member, actor) { if (member?.id && participant.memberId) return participant.memberId === member.id; if (member?.telegramId && participant.telegramId) return String(participant.telegramId) === String(member.telegramId); return participant.displayName.toLowerCase() === cleanName(actor).toLowerCase(); }
+  function canManagePlan(plan, member, actor) { return ['owner', 'admin'].includes(member?.role) || (member?.id && plan.createdById === member.id) || (!plan.createdById && plan.createdBy.toLowerCase() === cleanName(actor).toLowerCase()); }
+  function requirePlanManager(plan, member, actor) { if (!canManagePlan(plan, member, actor)) throw Object.assign(new Error('Only the plan creator or a house admin can manage this plan.'), { statusCode: 403 }); }
+  function addPlan(chatId, details, actor, actorProfile) {
+    const title = String(details.title || '').trim().slice(0, 140); if (!title) throw Object.assign(new Error('Plan title is required.'), { statusCode: 400 });
+    const startsAt = details.startsAt ? new Date(details.startsAt) : null; if (!startsAt || Number.isNaN(startsAt.getTime())) throw Object.assign(new Error('Choose a valid plan date.'), { statusCode: 400 });
+    const costMode = details.costMode === 'shared' ? 'shared' : 'free'; const budget = details.estimatedBudgetCents == null || details.estimatedBudgetCents === '' ? null : Number(details.estimatedBudgetCents);
+    if (budget !== null && (!Number.isFinite(budget) || budget < 0)) throw Object.assign(new Error('Estimated budget must be zero or more.'), { statusCode: 400 });
+    const creator = actorProfile || memberByTelegramId(chatId, details.createdByTelegramId) || list('memberProfiles', chatId).find((m) => m.displayName.toLowerCase() === cleanName(actor).toLowerCase());
+    const plan = { id: makeId('p'), title, type: String(details.type || 'Custom').trim().slice(0, 60), customType: details.customType ? String(details.customType).trim().slice(0, 60) : null, description: String(details.description || '').trim().slice(0, 500), location: String(details.location || '').trim().slice(0, 120), startsAt: startsAt.toISOString(), endsAt: details.endsAt || null, createdBy: cleanName(actor), createdById: creator?.id || null, costMode, estimatedBudgetCents: budget, status: 'active', participants: [planParticipant(creator || { displayName: actor })], bringItems: (details.bringItems || []).map(normalizeBringItem).filter((item) => item.name), createdAt: now(), updatedAt: now() };
+    list('plans', chatId).push(plan); addActivity(chatId, 'plan.created', `${actor} created “${plan.title}”`, actor, { planId: plan.id }); save(); return plan;
+  }
+  function joinPlan(chatId, identifier, actor, actorProfile) {
+    const plan = findPlan(chatId, identifier); if (!plan || plan.status !== 'active') return null; const member = actorProfile || list('memberProfiles', chatId).find((m) => m.displayName.toLowerCase() === cleanName(actor).toLowerCase()); const participant = planParticipant(member || { displayName: actor });
+    const existing = plan.participants.find((p) => (p.memberId && p.memberId === participant.memberId) || p.displayName.toLowerCase() === participant.displayName.toLowerCase());
+    if (existing) { existing.status = 'joined'; existing.displayName = participant.displayName; plan.updatedAt = now(); save(); return { plan, participant: existing, joined: false }; }
+    plan.participants.push(participant); plan.updatedAt = now(); addActivity(chatId, 'plan.joined', `${participant.displayName} joined “${plan.title}”`, participant.displayName, { planId: plan.id }); save(); return { plan, participant, joined: true };
+  }
+  function leavePlan(chatId, identifier, actor, actorProfile) {
+    const plan = findPlan(chatId, identifier); if (!plan || plan.status !== 'active') return null; const name = cleanName(actor); const participant = plan.participants.find((p) => samePlanMember(p, actorProfile, actor)); if (!participant) return { plan, left: false };
+    participant.status = 'left'; plan.updatedAt = now(); addActivity(chatId, 'plan.left', `${name} left “${plan.title}”`, name, { planId: plan.id }); save(); return { plan, left: true };
+  }
+  function addPlanItem(chatId, identifier, details, actor, actorProfile) {
+    const plan = findPlan(chatId, identifier); if (!plan || plan.status !== 'active') return null; requirePlanManager(plan, actorProfile, actor); const item = normalizeBringItem(details, plan.bringItems.length); if (!item.name) throw Object.assign(new Error('Bring item name is required.'), { statusCode: 400 });
+    plan.bringItems.push(item); plan.updatedAt = now(); addActivity(chatId, 'plan.item.added', `${actor} added ${item.name} to “${plan.title}”`, actor, { planId: plan.id, itemId: item.id }); save(); return { plan, item };
+  }
+  function claimPlanItem(chatId, identifier, itemId, actor, actorProfile, claimed = true) {
+    const plan = findPlan(chatId, identifier); if (!plan || plan.status !== 'active') return null; const item = plan.bringItems.find((entry) => entry.id === itemId || entry.name.toLowerCase() === String(itemId).toLowerCase()); if (!item) return null; const name = cleanName(actor); const member = actorProfile || list('memberProfiles', chatId).find((m) => m.displayName.toLowerCase() === name.toLowerCase());
+    if (claimed) { if (item.claimedById && item.claimedById !== member?.id) throw Object.assign(new Error('This item is already claimed by another member.'), { statusCode: 409 }); item.claimedBy = name; item.claimedById = member?.id || null; item.claimedAt = now(); item.status = 'claimed'; } else { const ownsClaim = (member?.id && item.claimedById === member.id) || (!item.claimedById && item.claimedBy?.toLowerCase() === name.toLowerCase()); if (!ownsClaim && !canManagePlan(plan, member, actor)) throw Object.assign(new Error('Only the claimant or a plan manager can unclaim this item.'), { statusCode: 403 }); item.claimedBy = null; item.claimedById = null; item.claimedAt = null; item.status = 'open'; }
+    plan.updatedAt = now(); addActivity(chatId, claimed ? 'plan.item.claimed' : 'plan.item.unclaimed', `${name} ${claimed ? 'claimed' : 'unclaimed'} “${item.name}”`, name, { planId: plan.id, itemId: item.id }); save(); return { plan, item };
+  }
+  function updatePlanStatus(chatId, identifier, status, actor, actorProfile) {
+    const plan = findPlan(chatId, identifier); if (!plan) return null; if (!['active', 'completed', 'cancelled'].includes(status)) throw Object.assign(new Error('Invalid plan status.'), { statusCode: 400 });
+    requirePlanManager(plan, actorProfile, actor); plan.status = status; plan.updatedAt = now(); addActivity(chatId, `plan.${status}`, `${actor} marked “${plan.title}” ${status}`, actor, { planId: plan.id }); save(); return plan;
+  }
+  function addPlanExpense(chatId, identifier, details, actor, source = 'telegram', actorProfile) {
+    const plan = findPlan(chatId, identifier); if (!plan || plan.status !== 'active') return null; if (plan.costMode !== 'shared') throw Object.assign(new Error('Plan expenses require Shared Cost mode.'), { statusCode: 400 });
+    if (!plan.participants.some((participant) => participant.status === 'joined' && samePlanMember(participant, actorProfile, actor))) throw Object.assign(new Error('Join this plan before adding a plan expense.'), { statusCode: 403 });
+    const participants = uniqueNames(plan.participants.filter((p) => p.status === 'joined').map((p) => p.displayName)); if (!participants.length) throw Object.assign(new Error('At least one joined participant is required.'), { statusCode: 400 });
+    const expense = addExpense(chatId, { ...details, planId: plan.id, participants }, actor, source); addActivity(chatId, 'plan.expense.added', `${actor} added ${expense.description} to “${plan.title}”`, actor, { planId: plan.id, expenseId: expense.id }); save(); return expense;
   }
   function activeExpenses(chatId) { return list('expenses', chatId).filter((expense) => !expense.deletedAt && expense.status !== 'void'); }
   function lastExpense(chatId) { return activeExpenses(chatId).at(-1) || null; }
@@ -176,11 +221,18 @@ function createStore(dataFile) {
   function dashboard(chatId, viewer) {
     const expenses = activeExpenses(chatId); const chores = list('chores', chatId); const groceries = list('groceries', chatId); const members = list('memberProfiles', chatId); const balances = calculateBalances(expenses, memberNames(chatId));
     const locale = viewer?.telegramId ? resolveLocale(chatId, { id: viewer.telegramId, language_code: viewer.telegramLanguageCode }) : settings(chatId).defaultLocale;
-    return { expenses, chores, groceries, funds: list('funds', chatId), corrections: list('corrections', chatId), notes: list('notes', chatId), members, activity: list('activity', chatId), settings: settings(chatId), balances, viewer: viewer ? { ...viewer, locale } : null, locale };
+    const cribSettings = settings(chatId);
+    return { expenses, chores, groceries, funds: list('funds', chatId), corrections: list('corrections', chatId), notes: list('notes', chatId), plans: list('plans', chatId), members, activity: list('activity', chatId), settings: cribSettings, balances, viewer: viewer ? { ...viewer, locale } : null, locale, modePicker: dashboardModePicker(cribSettings.cribMode) };
   }
+
   function markUpdate(updateId) { if (updateId == null) return true; if (state.processedUpdates[updateId]) return false; state.processedUpdates[updateId] = now(); const ids = Object.keys(state.processedUpdates); if (ids.length > 1000) ids.slice(0, ids.length - 1000).forEach((id) => delete state.processedUpdates[id]); save(); return true; }
-  function clear(chatId) { for (const key of ['expenses', 'chores', 'members', 'memberProfiles', 'groceries', 'funds', 'corrections', 'notes', 'activity', 'settings']) state[key][chatId] = key === 'settings' ? defaultSettings() : []; save(); }
-  return { state, save, registerMember, isMember, memberByTelegramId, housesForTelegramId, activeChatId, setActiveChatId, clearActiveChatId, memberNames, addExpense, activeExpenses, lastExpense, findExpense, voidExpense, addChore, findChore, updateChore, deleteChore, addGrocery, updateGrocery, deleteGrocery, addFund, findFund, chipInFund, addCorrection, findCorrection, updateCorrection, addNote, listNotes, updateSettings, dashboard, addActivity, markUpdate, clear, settings, userLocale, setUserLocale, resolveLocale };
+
+  function clear(chatId) { for (const key of ['expenses', 'chores', 'members', 'memberProfiles', 'groceries', 'funds', 'corrections', 'notes', 'plans', 'activity', 'settings']) state[key][chatId] = key === 'settings' ? defaultSettings() : []; save(); }
+  return { driver: 'json', state, save, registerMember, isMember, memberByTelegramId, housesForTelegramId, activeChatId, setActiveChatId, clearActiveChatId, memberNames, addExpense, activeExpenses, lastExpense, findExpense, voidExpense, addChore, findChore, updateChore, deleteChore, addGrocery, updateGrocery, deleteGrocery, addFund, findFund, chipInFund, addPlan, findPlan, joinPlan, leavePlan, addPlanItem, claimPlanItem, updatePlanStatus, addPlanExpense, addCorrection, findCorrection, updateCorrection, addNote, listNotes, updateSettings, dashboard, addActivity, markUpdate, clear, settings, userLocale, setUserLocale, resolveLocale };
 }
 
-module.exports = { createStore, defaultSettings };
+function createStore(dataFile) {
+  return createJsonStore(dataFile);
+}
+
+module.exports = { createStore, createJsonStore, defaultSettings };

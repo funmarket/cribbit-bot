@@ -5,4 +5,5 @@ dist/
 !.env.example
 expenses.json
 npm-debug.log*
+*.tsbuildinfo
 

@@ -18,9 +18,9 @@ function parseNaturalExpense(text, actorName) {
   if (exclude) { excluded = cleanName(exclude[1]); description = description.slice(0, exclude.index).trim(); }
   return { amount, description, paidBy, ...(participants ? { participants } : {}), ...(excluded ? { excluded } : {}) };
 }
-function createExpense({ amount, amountCents, description, paidBy, addedBy, participants, source = 'telegram', category = 'Other', notes = '' }) {
+function createExpense({ amount, amountCents, description, paidBy, addedBy, participants, source = 'telegram', category = 'Other', notes = '', planId = null }) {
   const cents = Number.isInteger(amountCents) ? amountCents : Math.round(Number(amount) * 100);
   if (!Number.isInteger(cents) || cents <= 0) throw Object.assign(new Error('Expense amount must be greater than zero.'), { statusCode: 400 });
-  return { id: `e-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, amountCents: cents, amount: cents / 100, description: String(description).trim().slice(0, 160), paidBy: cleanName(paidBy), addedBy: cleanName(addedBy), participants: uniqueNames(participants || []), category: String(category || 'Other').trim().slice(0, 40), notes: String(notes || '').trim().slice(0, 500), source, status: 'active', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  return { id: `e-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, amountCents: cents, amount: cents / 100, description: String(description).trim().slice(0, 160), paidBy: cleanName(paidBy), addedBy: cleanName(addedBy), participants: uniqueNames(participants || []), category: String(category || 'Other').trim().slice(0, 40), notes: String(notes || '').trim().slice(0, 500), planId, source, status: 'active', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
 }
 module.exports = { cleanName, createExpense, parseNaturalExpense, uniqueNames, normalizeDigits, parseLocalizedAmount };

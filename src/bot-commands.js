@@ -13,6 +13,8 @@ const COMMANDS = [
   ['done', 'Mark a chore complete'],
   ['grocery', 'Add a grocery item'],
   ['groceries', 'View the grocery list'],
+  ['plan', 'Create, join, or view plans'],
+  ['plans', 'List active plans'],
   ['fundme', 'Create a shared fund goal'],
   ['chipin', 'Contribute to a fund'],
   ['funds', 'List shared funds'],
