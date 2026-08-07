@@ -274,6 +274,19 @@ svg {
   padding: 0 8px;
   margin-bottom: 14px;
 }
+.brand-home-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  border-radius: 10px;
+}
+.brand-home-button:hover,
+.brand-home-button:focus-visible {
+  background: var(--surface-2);
+}
 .app-logo {
   width: 31px;
   height: 31px;
@@ -303,6 +316,51 @@ svg {
   padding: 9px 10px;
   margin-bottom: 14px;
   text-align: left;
+}
+.crib-dropdown {
+  position: relative;
+}
+.sidebar-crib-dropdown {
+  margin-bottom: 14px;
+}
+.sidebar-crib-dropdown .house-card {
+  margin-bottom: 0;
+}
+.crib-dropdown-menu {
+  position: absolute;
+  z-index: 180;
+  top: calc(100% + 7px);
+  left: 0;
+  width: 100%;
+  min-width: 220px;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--surface-solid);
+  box-shadow: var(--shadow-2);
+}
+.crib-dropdown-menu button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.crib-dropdown-menu button:hover,
+.crib-dropdown-menu button:focus-visible,
+.crib-dropdown-menu button[aria-current="true"] {
+  background: var(--brand-soft);
+}
+.crib-dropdown-menu button small {
+  color: var(--muted);
+  white-space: nowrap;
 }
 .house-card:hover {
   transform: translateY(-1px);
@@ -1637,6 +1695,37 @@ dialog label {
     padding-left: 14px;
     padding-right: 14px;
   }
+}
+.mobile-home-button {
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+}
+.mobile-home-button:hover,
+.mobile-home-button:focus-visible {
+  background: var(--surface-2);
+}
+.mobile-home-button img {
+  width: 37px;
+  height: 37px;
+  border-radius: 10px;
+}
+.mobile-crib-dropdown {
+  flex: 1;
+  min-width: 0;
+}
+.mobile-crib-dropdown .mobile-house-switcher {
+  width: 100%;
+}
+.mobile-crib-menu {
+  min-width: min(310px, calc(100vw - 24px));
 }
 
 @media (max-width: 560px) {
