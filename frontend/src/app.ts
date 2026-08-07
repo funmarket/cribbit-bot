@@ -686,24 +686,29 @@ function wishlistCreateForm(area) {
     host.hidden = true;
     host.innerHTML = "";
   };
-  host.querySelector("form").onsubmit = async (e) => {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    try {
-      await apiAction("wishlist.create", {
-        area,
-        title: String(f.get("title") || "").trim(),
-        category: f.get("category"),
-        targetCents: Math.round(Number(f.get("target") || 0) * 100),
-      });
-      host.hidden = true;
-      host.innerHTML = "";
-      document
-        .querySelector(`[data-wishlist-card="${area}"]`)
-        ?.classList.add("open");
-    } catch (err) {
-      toast(err.message, true);
-    }
+  const form = host.querySelector("form");
+  form.onsubmit = (event) => {
+    event.preventDefault();
+    const values = new FormData(form);
+    return runFormSubmission({
+      form,
+      submitButton: form.querySelector('[type="submit"]'),
+      save: () =>
+        apiAction("wishlist.create", {
+          area,
+          title: String(values.get("title") || "").trim(),
+          category: values.get("category"),
+          targetCents: Math.round(Number(values.get("target") || 0) * 100),
+        }),
+      onError: (error) => toast(error.message, true),
+      onSuccess: () => {
+        host.hidden = true;
+        host.innerHTML = "";
+        document
+          .querySelector(`[data-wishlist-card="${area}"]`)
+          ?.classList.add("open");
+      },
+    });
   };
 }
 function bindWishlistActions() {
@@ -3529,37 +3534,39 @@ $("#expense-form").addEventListener("submit", (event) => {
 });
 $("#expense-reject-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const fd = new FormData(event.currentTarget);
+  const form = event.currentTarget;
+  const fd = new FormData(form);
   const claimId = fd.get("claimId"),
     comment = String(fd.get("comment") || "").trim();
   if (!comment) {
     toast("Add a rejection comment.", true);
     return;
   }
-  $("#expense-reject-modal").close();
-  try {
-    await apiAction("payment.claim.reject", { claimId, comment });
-    event.currentTarget.reset();
-  } catch (e) {
-    toast(e.message, true);
-  }
+  return runFormSubmission({
+    form,
+    dialog: $("#expense-reject-modal"),
+    submitButton: form.querySelector('[type="submit"]'),
+    save: () => apiAction("payment.claim.reject", { claimId, comment }),
+    onError: (error) => toast(error.message, true),
+  });
 });
 $("#chore-review-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const fd = new FormData(event.currentTarget);
+  const form = event.currentTarget;
+  const fd = new FormData(form);
   const choreId = fd.get("choreId"),
     comment = String(fd.get("comment") || "").trim();
   if (!comment) {
     toast("Tell them what needs fixing.", true);
     return;
   }
-  $("#chore-review-modal").close();
-  try {
-    await apiAction("chore.review.needs_fixing", { choreId, comment });
-    event.currentTarget.reset();
-  } catch (e) {
-    toast(e.message, true);
-  }
+  return runFormSubmission({
+    form,
+    dialog: $("#chore-review-modal"),
+    submitButton: form.querySelector('[type="submit"]'),
+    save: () => apiAction("chore.review.needs_fixing", { choreId, comment }),
+    onError: (error) => toast(error.message, true),
+  });
 });
 $("#request-related")?.addEventListener("change", (event) => {
   const value = String(event.target.value || "");
@@ -3596,14 +3603,14 @@ $("#request-form").addEventListener("submit", async (event) => {
     toast("Choose a roomie and write the request.", true);
     return;
   }
-  $("#request-modal").close();
-  try {
-    await apiAction("request.create", payload);
-    form.reset();
-    showView("requests");
-  } catch (e) {
-    toast(e.message, true);
-  }
+  return runFormSubmission({
+    form,
+    dialog: $("#request-modal"),
+    submitButton: form.querySelector('[type="submit"]'),
+    save: () => apiAction("request.create", payload),
+    onError: (error) => toast(error.message, true),
+    onSuccess: () => showView("requests"),
+  });
 });
 $("#chore-form").addEventListener("submit", (event) =>
   submitForm(event, "chore.add", $("#chore-modal")),
@@ -3633,17 +3640,18 @@ $("#fund-form").addEventListener("submit", async (event) => {
     toast("Add a goal name and target amount.", true);
     return;
   }
-  $("#fund-modal").close();
-  try {
-    await apiAction("fund.create", {
-      title,
-      goal,
-      goalCents: Math.round(goal * 100),
-    });
-    form.reset();
-  } catch (error) {
-    toast(error.message, true);
-  }
+  return runFormSubmission({
+    form,
+    dialog: $("#fund-modal"),
+    submitButton: form.querySelector('[type="submit"]'),
+    save: () =>
+      apiAction("fund.create", {
+        title,
+        goal,
+        goalCents: Math.round(goal * 100),
+      }),
+    onError: (error) => toast(error.message, true),
+  });
 });
 $("#chipin-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -3655,17 +3663,18 @@ $("#chipin-form").addEventListener("submit", async (event) => {
     toast("Enter an amount to chip in.", true);
     return;
   }
-  $("#chipin-modal").close();
-  try {
-    await apiAction("fund.chipin", {
-      fundId,
-      amount,
-      amountCents: Math.round(amount * 100),
-    });
-    form.reset();
-  } catch (error) {
-    toast(error.message, true);
-  }
+  return runFormSubmission({
+    form,
+    dialog: $("#chipin-modal"),
+    submitButton: form.querySelector('[type="submit"]'),
+    save: () =>
+      apiAction("fund.chipin", {
+        fundId,
+        amount,
+        amountCents: Math.round(amount * 100),
+      }),
+    onError: (error) => toast(error.message, true),
+  });
 });
 $("#wishlist-chipin-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -3677,17 +3686,18 @@ $("#wishlist-chipin-form").addEventListener("submit", async (event) => {
     toast("Enter an amount to chip in.", true);
     return;
   }
-  $("#wishlist-chipin-modal").close();
-  try {
-    await apiAction("wishlist.chipin", {
-      wishId,
-      amount,
-      amountCents: Math.round(amount * 100),
-    });
-    form.reset();
-  } catch (error) {
-    toast(error.message, true);
-  }
+  return runFormSubmission({
+    form,
+    dialog: $("#wishlist-chipin-modal"),
+    submitButton: form.querySelector('[type="submit"]'),
+    save: () =>
+      apiAction("wishlist.chipin", {
+        wishId,
+        amount,
+        amountCents: Math.round(amount * 100),
+      }),
+    onError: (error) => toast(error.message, true),
+  });
 });
 let planBringDraft = [];
 function renderPlanBringDraft() {
@@ -3771,18 +3781,20 @@ $("#plan-form").addEventListener("submit", async (event) => {
     estimatedBudgetCents: Math.round(estimated * 100),
     bringItems: [...planBringDraft],
   };
-  $("#plan-modal").close();
-  try {
-    await apiAction("plan.create", payload);
-    form.reset();
-    planBringDraft = [];
-    renderPlanBringDraft();
-    $("#plan-custom-type-row").hidden = true;
-    $("#plan-budget-row").hidden = true;
-    showView("plans");
-  } catch (error) {
-    toast(error.message, true);
-  }
+  return runFormSubmission({
+    form,
+    dialog: $("#plan-modal"),
+    submitButton: form.querySelector('[type="submit"]'),
+    save: () => apiAction("plan.create", payload),
+    onError: (error) => toast(error.message, true),
+    onSuccess: () => {
+      planBringDraft = [];
+      renderPlanBringDraft();
+      $("#plan-custom-type-row").hidden = true;
+      $("#plan-budget-row").hidden = true;
+      showView("plans");
+    },
+  });
 });
 $("#locale-select").addEventListener("change", async (event) => {
   const locale = i18n.normalize(event.target.value);

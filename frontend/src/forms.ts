@@ -4,6 +4,7 @@ export async function runFormSubmission({
   submitButton,
   save,
   onError,
+  onSuccess,
 }) {
   if (!form || typeof save !== "function")
     throw new TypeError("A form and save function are required.");
@@ -25,6 +26,7 @@ export async function runFormSubmission({
 
     form.reset();
     dialog?.close();
+    onSuccess?.();
     return true;
   } finally {
     form.removeAttribute?.("aria-busy");
