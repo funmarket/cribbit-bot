@@ -85,6 +85,36 @@ test('persists funds, corrections, house rules, quiet hours, and planning notes'
   assert.equal(reloaded.notes.find((note) => note.type === 'dinner').text, 'Tacos Friday');
 });
 
+test('persists plans, join state, bring items, and plan expense participant snapshots', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-plans-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true })); const file = path.join(directory, 'data.json');
+  const store = createStore(file);
+  const alex = store.registerMember('123', { id: 1, first_name: 'Alex' }, 'Oak Street');
+  store.registerMember('123', { id: 2, first_name: 'Maya' }, 'Oak Street');
+  store.registerMember('123', { id: 3, first_name: 'Noah' }, 'Oak Street');
+  const plan = store.addPlan('123', { title: 'Beach Day', type: 'Beach Day', location: 'Brighton Beach', startsAt: '2026-08-23T10:00:00Z', costMode: 'shared', estimatedBudgetCents: 9000, bringItems: [{ name: 'Ice' }], createdByTelegramId: 1 }, 'Alex', alex);
+  assert.equal(plan.participants.length, 1);
+  assert.equal(plan.participants[0].displayName, 'Alex');
+  const maya = store.memberByTelegramId('123', 2); const noah = store.memberByTelegramId('123', 3);
+  assert.equal(store.joinPlan('123', plan.id, 'Maya', maya).joined, true);
+  assert.equal(store.joinPlan('123', plan.id, 'Maya', maya).joined, false);
+  const item = store.addPlanItem('123', plan.id, { name: 'Drinks' }, 'Alex', alex).item;
+  assert.equal(store.claimPlanItem('123', plan.id, item.id, 'Maya', maya).item.claimedBy, 'Maya');
+  assert.throws(() => store.claimPlanItem('123', plan.id, item.id, 'Noah', noah), /already claimed/);
+  assert.throws(() => store.claimPlanItem('123', plan.id, item.id, 'Noah', noah, false), /claimant or a plan manager/);
+  assert.throws(() => store.updatePlanStatus('123', plan.id, 'cancelled', 'Maya', maya), /creator or a house admin/);
+  assert.throws(() => store.addPlanExpense('123', plan.id, { amount: 10, description: 'Parking', paidBy: 'Noah' }, 'Noah', 'telegram', noah), /Join this plan/);
+  const food = store.addPlanExpense('123', plan.id, { amount: 40, description: 'Food', paidBy: 'Alex' }, 'Alex', 'telegram', alex);
+  assert.deepEqual(food.participants, ['Alex', 'Maya']);
+  store.joinPlan('123', plan.id, 'Noah', noah);
+  const parking = store.addPlanExpense('123', plan.id, { amount: 30, description: 'Parking', paidBy: 'Maya' }, 'Maya', 'telegram', maya);
+  assert.deepEqual(food.participants, ['Alex', 'Maya']);
+  assert.deepEqual(parking.participants, ['Alex', 'Maya', 'Noah']);
+  assert.equal(store.updatePlanStatus('123', plan.id, 'completed', 'Alex', alex).status, 'completed');
+  const reloaded = createStore(file).dashboard('123');
+  assert.equal(reloaded.plans[0].title, 'Beach Day');
+  assert.equal(reloaded.expenses.find((expense) => expense.id === food.id).participants.length, 2);
+});
+
 test('discovers only active shared-house memberships for a Telegram user', (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-houses-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true })); const store = createStore(path.join(directory, 'data.json'));
   store.registerMember('-1001', { id: 42, first_name: 'Alex' }, 'Oak Street'); store.registerMember('-1002', { id: 42, first_name: 'Alex' }, 'Pine House'); store.registerMember('42', { id: 42, first_name: 'Alex' }, 'Private chat');
@@ -177,7 +207,7 @@ test('serves authenticated dashboard data and persistent actions', async (t) => 
 });
 
 test('Telegram command menu includes persistent product areas', () => {
-  const expectedCommands = ['start', 'help', 'setup', 'split', 'balance', 'settle', 'undo', 'void', 'last', 'chore', 'chores', 'done', 'grocery', 'groceries', 'fundme', 'chipin', 'funds', 'corrections', 'confirm', 'reject', 'roomies', 'activity', 'settings', 'dashboard', 'language', 'houserules', 'quiethours', 'party', 'tab', 'ding', 'dinner', 'sundayplan', 'pickup', 'date', 'ours', 'mood'];
+  const expectedCommands = ['start', 'help', 'setup', 'split', 'balance', 'settle', 'undo', 'void', 'last', 'chore', 'chores', 'done', 'grocery', 'groceries', 'plan', 'plans', 'fundme', 'chipin', 'funds', 'corrections', 'confirm', 'reject', 'roomies', 'activity', 'settings', 'dashboard', 'language', 'houserules', 'quiethours', 'party', 'tab', 'ding', 'dinner', 'sundayplan', 'pickup', 'date', 'ours', 'mood'];
   assert.deepEqual(BOT_COMMANDS.map(({ command }) => command), expectedCommands);
   for (const locale of ['en', 'fr', 'ar']) assert.deepEqual(commandsForLocale(locale).map(({ command }) => command), expectedCommands);
   assert.ok(BOT_COMMANDS.every(({ description }) => description.length > 0 && description.length <= 256));
@@ -315,5 +345,5 @@ test('form submissions close only after success and block duplicate requests', a
 
 test('dashboard route opens the Mini App document with required runtime assets', async () => {
   const server = startDashboardServer({ getDashboard: () => ({}), performAction: () => ({}), authenticate: () => ({}), port: 0 }); await new Promise((resolve) => server.once('listening', resolve));
-  try { const base = `http://127.0.0.1:${server.address().port}`; const response = await fetch(`${base}/app`); const html = await response.text(); assert.equal(response.status, 200); assert.match(html, /id="settings-form"/); assert.match(html, /src="\/form-submit\.js"/); assert.match(html, /src="\/app-config\.js"/); const helper = await fetch(`${base}/form-submit.js`); assert.equal(helper.status, 200); assert.match(helper.headers.get('content-type'), /application\/javascript/); const config = await fetch(`${base}/app-config.js`); assert.equal(config.status, 200); assert.match(config.headers.get('content-type'), /application\/javascript/); } finally { server.close(); }
+  try { const base = `http://127.0.0.1:${server.address().port}`; const response = await fetch(`${base}/app`); const html = await response.text(); assert.equal(response.status, 200); assert.match(html, /id="settings-form"/); assert.match(html, /data-panel="plans"/); assert.match(html, /id="plan-form"/); assert.match(html, /id="plan-expense-form"/); assert.match(html, /src="\/form-submit\.js"/); assert.match(html, /src="\/app-config\.js"/); const helper = await fetch(`${base}/form-submit.js`); assert.equal(helper.status, 200); assert.match(helper.headers.get('content-type'), /application\/javascript/); const config = await fetch(`${base}/app-config.js`); assert.equal(config.status, 200); assert.match(config.headers.get('content-type'), /application\/javascript/); } finally { server.close(); }
 });
