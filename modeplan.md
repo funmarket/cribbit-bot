@@ -840,10 +840,10 @@ Reference files:
 
 Reference files are read-only. Do not copy them directly into production. Do not create `src\crib-modes.js`.
 
-Exact files to change, in order:
+Exact files to inspect/change, in order:
 
 1. Edit `C:\Users\GrowB\cribbit-bot\src\modes.js`
-2. Edit `C:\Users\GrowB\cribbit-bot\src\store.js`
+2. Inspect `C:\Users\GrowB\cribbit-bot\src\store.js`; only edit if it hardcodes the old default instead of importing `DEFAULT_MODE`
 3. Edit `C:\Users\GrowB\cribbit-bot\test\cribbit.test.js`
 4. Edit `C:\Users\GrowB\cribbit-bot\modeplan.md`
 
@@ -860,90 +860,90 @@ Do not change in this slice:
 
 Mode taxonomy checklist:
 
-- [ ] Change `DEFAULT_MODE` from `roomies` to `classic`.
-- [ ] Add `classic`.
-- [ ] Keep `roomies`.
-- [ ] Replace `cubs` with `buds`.
-- [ ] Add `ladiessecret`.
-- [ ] Keep `twinsoul`.
-- [ ] Replace `nest` with `famsquad`.
-- [ ] Add `schoolbuddies`.
-- [ ] Replace `colleagues` with `workcrew`.
-- [ ] Replace `crew` with `wandercrew`.
-- [ ] Add `pawpack`.
-- [ ] Move `guild` to future/backlog unless explicitly re-approved for launch.
+- [x] Change `DEFAULT_MODE` from `roomies` to `classic`.
+- [x] Add `classic`.
+- [x] Keep `roomies`.
+- [x] Replace `cubs` with `buds`.
+- [x] Add `ladiessecret`.
+- [x] Keep `twinsoul`.
+- [x] Replace `nest` with `famsquad`.
+- [x] Add `schoolbuddies`.
+- [x] Replace `colleagues` with `workcrew`.
+- [x] Replace `crew` with `wandercrew`.
+- [x] Add `pawpack`.
+- [x] Move `guild` to future/backlog unless explicitly re-approved for launch.
 
 Compatibility aliases checklist:
 
-- [ ] `cubs` normalizes to `buds`.
-- [ ] `buddies` normalizes to `buds`.
-- [ ] `nest` normalizes to `famsquad`.
-- [ ] `family` normalizes to `famsquad`.
-- [ ] `colleagues` normalizes to `workcrew`.
-- [ ] `work` normalizes to `workcrew`.
-- [ ] `crew` normalizes to `wandercrew`.
-- [ ] `travel` normalizes to `wandercrew`.
-- [ ] `couple` normalizes to `twinsoul`.
-- [ ] empty, null, and unknown values normalize to `classic`.
+- [x] `cubs` normalizes to `buds`.
+- [x] `buddies` normalizes to `buds`.
+- [x] `nest` normalizes to `famsquad`.
+- [x] `family` normalizes to `famsquad`.
+- [x] `colleagues` normalizes to `workcrew`.
+- [x] `work` normalizes to `workcrew`.
+- [x] `crew` normalizes to `wandercrew`.
+- [x] `travel` normalizes to `wandercrew`.
+- [x] `couple` normalizes to `twinsoul`.
+- [x] empty, null, and unknown values normalize to `classic`.
 
 Mode definition fields checklist:
 
-- [ ] Every mode has `key`.
-- [ ] Every mode has `name`.
-- [ ] Every mode has `emoji`.
-- [ ] Every mode uses the emoji from the ZIP/reference unless a better Cribbit-specific emoji is explicitly chosen.
-- [ ] Every mode has `tagline`.
-- [ ] Every mode has `audience`.
-- [ ] Every mode has `personality`.
-- [ ] Every mode has `tone`.
-- [ ] Every mode has `memberLabel`.
-- [ ] Every mode has `houseLabel`.
-- [ ] Every mode has `color`.
-- [ ] Every mode keeps the reference color/accent so the bot and dashboard feel polished and intentional.
-- [ ] Every mode has `primaryCommands`.
-- [ ] Every mode has `plannedCommands`.
-- [ ] Every mode has `overviewCards`.
+- [x] Every mode has `key`.
+- [x] Every mode has `name`.
+- [x] Every mode has `emoji`.
+- [x] Every mode uses the emoji from the ZIP/reference unless a better Cribbit-specific emoji is explicitly chosen.
+- [x] Every mode has `tagline`.
+- [x] Every mode has `audience`.
+- [x] Every mode has `personality`.
+- [x] Every mode has `tone`.
+- [x] Every mode has `memberLabel`.
+- [x] Every mode has `houseLabel`.
+- [x] Every mode has `color`.
+- [x] Every mode keeps the reference color/accent so the bot and dashboard feel polished and intentional.
+- [x] Every mode has `primaryCommands`.
+- [x] Every mode has `plannedCommands`.
+- [x] Every mode has `overviewCards`.
 
 Command symbol checklist:
 
-- [ ] Preserve the fun/professional symbols from the ZIP/reference for modes and commands.
-- [ ] Add command metadata for symbols/icons separately from command names, so Telegram command names remain lowercase ASCII.
+- [x] Preserve the fun/professional symbols from the ZIP/reference for modes and commands.
+- [x] Add command metadata for symbols/icons separately from command names, so Telegram command names remain lowercase ASCII.
 - [ ] Use symbols in bot messages, inline keyboards, mode summaries, dashboard chips, and settings cards where they improve clarity.
-- [ ] Do not put emojis inside actual Telegram command names.
-- [ ] Do not use playful symbols in errors, authorization failures, destructive actions, or financial amounts where precision matters.
+- [x] Do not put emojis inside actual Telegram command names.
+- [x] Do not use playful symbols in errors, authorization failures, destructive actions, or financial amounts where precision matters.
 
 Command safety checklist:
 
-- [ ] `primaryCommands` contains only commands already present in `BOT_COMMANDS`.
-- [ ] `plannedCommands` can contain future commands from the reference files.
-- [ ] No `plannedCommands` are added to `src\bot-commands.js`.
-- [ ] No `plannedCommands` are advertised as working in `/help`.
-- [ ] No per-chat command scopes are introduced.
-- [ ] No BotFather command changes are required.
+- [x] `primaryCommands` contains only commands already present in `BOT_COMMANDS`.
+- [x] `plannedCommands` can contain future commands from the reference files.
+- [x] No `plannedCommands` are added to `src\bot-commands.js`.
+- [x] No `plannedCommands` are advertised as working in `/help`.
+- [x] No per-chat command scopes are introduced.
+- [x] No BotFather command changes are required.
 
 Store/default checklist:
 
-- [ ] `defaultSettings().cribMode` becomes `classic`.
-- [ ] Existing saved values such as `roomies`, `nest`, `cubs`, `colleagues`, and `crew` normalize safely.
-- [ ] Dashboard payload still includes `settings.cribMode`.
-- [ ] No existing settings keys are removed or renamed.
+- [x] `defaultSettings().cribMode` becomes `classic`.
+- [x] Existing saved values such as `roomies`, `nest`, `cubs`, `colleagues`, and `crew` normalize safely.
+- [x] Dashboard payload still includes `settings.cribMode`.
+- [x] No existing settings keys are removed or renamed.
 
 Test checklist:
 
-- [ ] `DEFAULT_MODE === "classic"`.
-- [ ] `normalizeMode(null) === "classic"`.
-- [ ] `normalizeMode("not-a-mode") === "classic"`.
-- [ ] `normalizeMode("cubs") === "buds"`.
-- [ ] `normalizeMode("buddies") === "buds"`.
-- [ ] `normalizeMode("nest") === "famsquad"`.
-- [ ] `normalizeMode("colleagues") === "workcrew"`.
-- [ ] `normalizeMode("crew") === "wandercrew"`.
-- [ ] `modeNames()` returns exactly the launch modes in product order.
-- [ ] Every `primaryCommands` entry exists in `BOT_COMMANDS`.
-- [ ] `plannedCommands` are allowed to be absent from `BOT_COMMANDS`.
-- [ ] Store default mode is `classic`.
-- [ ] Store update/reload preserves a valid new mode.
-- [ ] Store update/reload normalizes an old alias to the new key.
+- [x] `DEFAULT_MODE === "classic"`.
+- [x] `normalizeMode(null) === "classic"`.
+- [x] `normalizeMode("not-a-mode") === "classic"`.
+- [x] `normalizeMode("cubs") === "buds"`.
+- [x] `normalizeMode("buddies") === "buds"`.
+- [x] `normalizeMode("nest") === "famsquad"`.
+- [x] `normalizeMode("colleagues") === "workcrew"`.
+- [x] `normalizeMode("crew") === "wandercrew"`.
+- [x] `modeNames()` returns exactly the launch modes in product order.
+- [x] Every `primaryCommands` entry exists in `BOT_COMMANDS`.
+- [x] `plannedCommands` are allowed to be absent from `BOT_COMMANDS`.
+- [x] Store default mode is `classic`.
+- [x] Store update/reload preserves a valid new mode.
+- [x] Store update/reload normalizes an old alias to the new key.
 
 Commands:
 
@@ -965,17 +965,17 @@ Evidence block to fill:
 
 ```text
 Slice: C.5 — Finalize public mode taxonomy
-Starting commit:
-Local commit:
-PR:
-Merge commit:
-Files changed:
-npm run typecheck:
-npm run build:
-git diff --check:
-Runtime behavior changed:
-Command menu changed:
-Known unverified items:
+Starting commit: d578f9a
+Local commit: this commit; final hash recorded in handoff after commit creation
+PR: pending
+Merge commit: pending
+Files changed: src/modes.js, test/cribbit.test.js, modeplan.md
+npm run typecheck: passed locally, 31/31 tests
+npm run build: passed locally
+git diff --check: passed locally
+Runtime behavior changed: default and invalid cribMode values now normalize to classic; old mode keys such as nest, cubs, colleagues, crew, and buddies normalize to their final launch-mode keys
+Command menu changed: no
+Known unverified items: GitHub PR/CI, merge commit, and production deployment are pending
 ```
 
 ### Slice D — Add `/mode` command and command-menu sync

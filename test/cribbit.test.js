@@ -14,7 +14,7 @@ const { startDashboardServer } = require('../src/dashboard-server');
 const { dashboardUrl, menuAppUrl, mainAppUrl, dashboardReplyMarkup } = require('../src/dashboard-links');
 const { BOT_COMMANDS, commandsForLocale } = require('../src/bot-commands');
 const { normalizeLocale, translate, missingTranslationKeys } = require('../src/i18n');
-const { DEFAULT_MODE, MODE_DEFINITIONS, normalizeMode, modeDefinition, modeNames, commandsForMode, isPrimaryModeCommand } = require('../src/modes');
+const { DEFAULT_MODE, MODE_DEFINITIONS, normalizeMode, modeDefinition, modeNames, modeBadge, commandsForMode, isPrimaryModeCommand } = require('../src/modes');
 const { normalizedOrigin, resolveApiBaseUrl, preferredHouseId } = require('../public/app-config');
 
 test('parses natural-language expenses including participant rules', () => {
@@ -64,11 +64,89 @@ test('persists crib mode settings and normalizes invalid values', (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-mode-settings-')); const file = path.join(directory, 'data.json'); t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const store = createStore(file);
   store.registerMember('123', { id: 42, first_name: 'Alex' }, 'Oak Street');
-  assert.equal(store.dashboard('123').settings.cribMode, 'roomies');
-  assert.equal(store.updateSettings('123', { cribMode: 'Nest' }, 'Alex').cribMode, 'nest');
-  assert.equal(createStore(file).dashboard('123').settings.cribMode, 'nest');
+  assert.equal(store.dashboard('123').settings.cribMode, 'classic');
+  assert.equal(store.updateSettings('123', { cribMode: 'Nest' }, 'Alex').cribMode, 'famsquad');
+  assert.equal(createStore(file).dashboard('123').settings.cribMode, 'famsquad');
   store.updateSettings('123', { cribMode: 'definitely-not-real' }, 'Alex');
-  assert.equal(createStore(file).dashboard('123').settings.cribMode, 'roomies');
+  assert.equal(createStore(file).dashboard('123').settings.cribMode, 'classic');
+});
+
+test('payment claims stay out of balances until an authorized non-claimant approves them once', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-claims-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const store = createStore(path.join(directory, 'data.json'));
+  const owner = store.registerMember('123', { id: 1, first_name: 'Alex' }, 'Oak Street');
+  const maya = store.registerMember('123', { id: 2, first_name: 'Maya' }, 'Oak Street');
+  const claim = store.addExpenseClaim('123', { description: 'Paper towels', amountCents: 1299, paidBy: 'Maya', receiptText: 'TOTAL 12.99', submittedById: maya.id }, 'Maya');
+  assert.equal(store.dashboard('123').expenses.length, 0);
+  assert.throws(() => store.reviewExpenseClaim('123', claim.id, 'approved', 'Maya', maya), /owner or admin/i);
+  maya.role = 'admin';
+  assert.throws(() => store.reviewExpenseClaim('123', claim.id, 'approved', 'Maya', maya), /cannot review your own/i);
+  const approved = store.reviewExpenseClaim('123', claim.id, 'approved', 'Alex', owner);
+  assert.equal(approved.status, 'approved');
+  assert.ok(approved.approvedExpenseId);
+  assert.equal(store.dashboard('123').expenses.length, 1);
+  assert.equal(store.dashboard('123').expenses[0].amountCents, 1299);
+  assert.equal(store.reviewExpenseClaim('123', claim.id, 'approved', 'Alex', owner), null);
+});
+
+test('chores use explicit review states and require feedback for needs fixing', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-chore-review-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const store = createStore(path.join(directory, 'data.json'));
+  const owner = store.registerMember('123', { id: 1, first_name: 'Alex' }, 'Oak Street');
+  const maya = store.registerMember('123', { id: 2, first_name: 'Maya' }, 'Oak Street');
+  const chore = store.addChore('123', { task: 'Clean the kitchen', assignedTo: 'Maya' }, 'Alex');
+  store.submitChoreForReview('123', chore.id, 'Maya', maya);
+  assert.equal(store.findChore('123', chore.id).status, 'pending_review');
+  assert.throws(() => store.reviewChore('123', chore.id, 'needs_fixing', 'Alex', owner), /requires feedback/i);
+  store.reviewChore('123', chore.id, 'needs_fixing', 'Alex', owner, 'Please wipe the counters too.');
+  assert.equal(store.findChore('123', chore.id).status, 'needs_fixing');
+  store.submitChoreForReview('123', chore.id, 'Maya', maya, true);
+  store.reviewChore('123', chore.id, 'approved', 'Alex', owner);
+  assert.equal(store.findChore('123', chore.id).status, 'verified_completed');
+  assert.equal(store.findChore('123', chore.id).done, true);
+});
+
+test('wishlists and requests persist without creating debt and enforce the recipient identity', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-coordination-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const store = createStore(path.join(directory, 'data.json'));
+  const alex = store.registerMember('123', { id: 1, first_name: 'Alex' }, 'Oak Street');
+  const maya = store.registerMember('123', { id: 2, first_name: 'Maya' }, 'Oak Street');
+  const wish = store.addWishlist('123', { area: 'groceries', title: 'BBQ supplies', targetCents: 5000 }, 'Alex', alex);
+  store.updateWishlistMembership('123', wish.id, 'Maya', maya, true);
+  assert.equal(store.dashboard('123').balances.totalSpentCents, 0);
+  store.chipInWishlist('123', wish.id, 1200, 'Maya', maya);
+  assert.equal(store.dashboard('123').balances.totalSpentCents, 0);
+  store.claimWishlist('123', wish.id, 'Maya', maya);
+  assert.equal(store.dashboard('123').wishlists[0].claimedBy, 'Maya');
+  const request = store.addRequest('123', { to: 'Maya', type: 'bring', message: 'Can you bring the cooler?', relatedType: 'wishlist', relatedId: wish.id }, 'Alex', alex);
+  assert.equal(store.dashboard('123', maya).notifications.length, 1);
+  assert.throws(() => store.updateRequest('123', request.id, 'accepted', 'Alex', alex), /recipient/i);
+  store.updateRequest('123', request.id, 'accepted', 'Maya', maya);
+  store.updateRequest('123', request.id, 'done', 'Maya', maya);
+  assert.equal(store.dashboard('123').requests[0].status, 'done');
+});
+
+test('settlements require the debtor and recipient, then persist a confirmed balance adjustment', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-settlements-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const store = createStore(path.join(directory, 'data.json'));
+  const alex = store.registerMember('123', { id: 1, first_name: 'Alex' }, 'Oak Street');
+  const maya = store.registerMember('123', { id: 2, first_name: 'Maya' }, 'Oak Street');
+  store.addExpense('123', { amount: 20, description: 'Dinner', paidBy: 'Alex', participants: ['Alex', 'Maya'] }, 'Alex');
+  const settlement = store.dashboard('123').balances.settlements[0];
+  assert.deepEqual({ from: settlement.from, to: settlement.to, amountCents: settlement.amountCents }, { from: 'Maya', to: 'Alex', amountCents: 1000 });
+  assert.throws(() => store.requestSettlement('123', settlement, 'Alex', alex), /own settlement/i);
+  const request = store.requestSettlement('123', settlement, 'Maya', maya);
+  assert.equal(store.dashboard('123', alex).notifications[0].type, 'settlement.pending');
+  assert.throws(() => store.reviewSettlement('123', request.id, 'confirmed', 'Maya', maya), /recipient/i);
+  store.reviewSettlement('123', request.id, 'confirmed', 'Alex', alex);
+  assert.equal(store.dashboard('123').balances.settlements.length, 0);
+  assert.equal(store.reviewSettlement('123', request.id, 'confirmed', 'Alex', alex), null);
+});
+
+test('the Vite planId action payload remains compatible with existing plan actions', (t) => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
+  assert.match(source, /store\.joinPlan\(chatId, payload\.id \|\| payload\.planId/);
+  assert.match(source, /store\.leavePlan\(chatId, payload\.id \|\| payload\.planId/);
 });
 
 test('persists funds, corrections, house rules, quiet hours, and planning notes', (t) => {
@@ -83,6 +161,36 @@ test('persists funds, corrections, house rules, quiet hours, and planning notes'
   assert.equal(reloaded.corrections[0].status, 'confirmed');
   assert.equal(reloaded.settings.houseRules, 'Clean up after dinner'); assert.equal(reloaded.settings.quietHours, '22:00-08:00'); assert.equal(reloaded.settings.partyMode, true);
   assert.equal(reloaded.notes.find((note) => note.type === 'dinner').text, 'Tacos Friday');
+});
+
+test('persists plans, join state, bring items, and plan expense participant snapshots', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-plans-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true })); const file = path.join(directory, 'data.json');
+  const store = createStore(file);
+  const alex = store.registerMember('123', { id: 1, first_name: 'Alex' }, 'Oak Street');
+  store.registerMember('123', { id: 2, first_name: 'Maya' }, 'Oak Street');
+  store.registerMember('123', { id: 3, first_name: 'Noah' }, 'Oak Street');
+  const plan = store.addPlan('123', { title: 'Beach Day', type: 'Beach Day', location: 'Brighton Beach', startsAt: '2026-08-23T10:00:00Z', costMode: 'shared', estimatedBudgetCents: 9000, bringItems: [{ name: 'Ice' }], createdByTelegramId: 1 }, 'Alex', alex);
+  assert.equal(plan.participants.length, 1);
+  assert.equal(plan.participants[0].displayName, 'Alex');
+  const maya = store.memberByTelegramId('123', 2); const noah = store.memberByTelegramId('123', 3);
+  assert.equal(store.joinPlan('123', plan.id, 'Maya', maya).joined, true);
+  assert.equal(store.joinPlan('123', plan.id, 'Maya', maya).joined, false);
+  const item = store.addPlanItem('123', plan.id, { name: 'Drinks' }, 'Alex', alex).item;
+  assert.equal(store.claimPlanItem('123', plan.id, item.id, 'Maya', maya).item.claimedBy, 'Maya');
+  assert.throws(() => store.claimPlanItem('123', plan.id, item.id, 'Noah', noah), /already claimed/);
+  assert.throws(() => store.claimPlanItem('123', plan.id, item.id, 'Noah', noah, false), /claimant or a plan manager/);
+  assert.throws(() => store.updatePlanStatus('123', plan.id, 'cancelled', 'Maya', maya), /creator or a house admin/);
+  assert.throws(() => store.addPlanExpense('123', plan.id, { amount: 10, description: 'Parking', paidBy: 'Noah' }, 'Noah', 'telegram', noah), /Join this plan/);
+  const food = store.addPlanExpense('123', plan.id, { amount: 40, description: 'Food', paidBy: 'Alex' }, 'Alex', 'telegram', alex);
+  assert.deepEqual(food.participants, ['Alex', 'Maya']);
+  store.joinPlan('123', plan.id, 'Noah', noah);
+  const parking = store.addPlanExpense('123', plan.id, { amount: 30, description: 'Parking', paidBy: 'Maya' }, 'Maya', 'telegram', maya);
+  assert.deepEqual(food.participants, ['Alex', 'Maya']);
+  assert.deepEqual(parking.participants, ['Alex', 'Maya', 'Noah']);
+  assert.equal(store.updatePlanStatus('123', plan.id, 'completed', 'Alex', alex).status, 'completed');
+  const reloaded = createStore(file).dashboard('123');
+  assert.equal(reloaded.plans[0].title, 'Beach Day');
+  assert.equal(reloaded.expenses.find((expense) => expense.id === food.id).participants.length, 2);
 });
 
 test('discovers only active shared-house memberships for a Telegram user', (t) => {
@@ -177,29 +285,53 @@ test('serves authenticated dashboard data and persistent actions', async (t) => 
 });
 
 test('Telegram command menu includes persistent product areas', () => {
-  const expectedCommands = ['start', 'help', 'setup', 'split', 'balance', 'settle', 'undo', 'void', 'last', 'chore', 'chores', 'done', 'grocery', 'groceries', 'fundme', 'chipin', 'funds', 'corrections', 'confirm', 'reject', 'roomies', 'activity', 'settings', 'dashboard', 'language', 'houserules', 'quiethours', 'party', 'tab', 'ding', 'dinner', 'sundayplan', 'pickup', 'date', 'ours', 'mood'];
+  const expectedCommands = ['start', 'help', 'setup', 'split', 'balance', 'settle', 'undo', 'void', 'last', 'chore', 'chores', 'done', 'grocery', 'groceries', 'plan', 'plans', 'fundme', 'chipin', 'funds', 'corrections', 'confirm', 'reject', 'roomies', 'activity', 'settings', 'dashboard', 'language', 'houserules', 'quiethours', 'party', 'tab', 'ding', 'dinner', 'sundayplan', 'pickup', 'date', 'ours', 'mood'];
   assert.deepEqual(BOT_COMMANDS.map(({ command }) => command), expectedCommands);
   for (const locale of ['en', 'fr', 'ar']) assert.deepEqual(commandsForLocale(locale).map(({ command }) => command), expectedCommands);
   assert.ok(BOT_COMMANDS.every(({ description }) => description.length > 0 && description.length <= 256));
 });
 
-test('central Crib Mode definitions are complete and command-safe', () => {
-  assert.equal(DEFAULT_MODE, 'roomies');
-  assert.equal(normalizeMode(''), 'roomies'); assert.equal(normalizeMode(null), 'roomies'); assert.equal(normalizeMode('not-a-mode'), 'roomies');
-  assert.equal(normalizeMode('Twin Soul'), 'twinsoul'); assert.equal(normalizeMode('family'), 'nest'); assert.equal(normalizeMode('work'), 'colleagues');
+test('central Crib Mode definitions are complete and emoji-aware', () => {
+  assert.equal(DEFAULT_MODE, 'classic');
+  assert.equal(normalizeMode(''), 'classic');
+  assert.equal(normalizeMode(null), 'classic');
+  assert.equal(normalizeMode('not-a-mode'), 'classic');
+  assert.equal(normalizeMode('Twin Soul'), 'twinsoul');
+  assert.equal(normalizeMode('family'), 'famsquad');
+  assert.equal(normalizeMode('work'), 'workcrew');
+  assert.equal(normalizeMode('cubs'), 'buds');
+  assert.equal(normalizeMode('buddies'), 'buds');
+  assert.equal(normalizeMode('nest'), 'famsquad');
+  assert.equal(normalizeMode('colleagues'), 'workcrew');
+  assert.equal(normalizeMode('crew'), 'wandercrew');
+  assert.equal(normalizeMode('travel'), 'wandercrew');
+  const modeKeys = modeNames().map(({ key }) => key);
+  assert.deepEqual(modeKeys, ['classic', 'roomies', 'buds', 'ladiessecret', 'twinsoul', 'famsquad', 'schoolbuddies', 'workcrew', 'wandercrew', 'pawpack']);
   const commandNames = new Set(BOT_COMMANDS.map(({ command }) => command));
   for (const mode of Object.values(MODE_DEFINITIONS)) {
     assert.equal(mode.key, normalizeMode(mode.key));
-    for (const property of ['key', 'name', 'audience', 'personality', 'primaryCommands', 'overviewCards', 'tone']) assert.ok(mode[property], `${mode.key} missing ${property}`);
+    for (const property of ['key', 'name', 'emoji', 'symbol', 'tagline', 'audience', 'personality', 'memberLabel', 'houseLabel', 'color', 'primaryCommands', 'plannedCommands', 'overviewCards', 'tone']) assert.ok(mode[property] || Array.isArray(mode[property]), `${mode.key} missing ${property}`);
     assert.ok(Array.isArray(mode.primaryCommands) && mode.primaryCommands.length > 0);
-    assert.ok(Array.isArray(mode.overviewCards) && mode.overviewCards.length > 0);
     for (const command of mode.primaryCommands) assert.ok(commandNames.has(command), `${mode.key} references unknown command ${command}`);
+    assert.ok(Array.isArray(mode.plannedCommands), `${mode.key} plannedCommands must be an array`);
+    for (const planned of mode.plannedCommands) {
+      assert.equal(typeof planned.command, 'string', `${mode.key} planned command missing command`);
+      assert.equal(planned.command.startsWith('/'), false, `${mode.key} planned command should not include slash`);
+      assert.equal(typeof planned.symbol, 'string', `${mode.key} planned command missing symbol`);
+      assert.equal(typeof planned.description, 'string', `${mode.key} planned command missing description`);
+    }
+    assert.ok(Array.isArray(mode.overviewCards) && mode.overviewCards.length > 0);
+    assert.equal(modeBadge(mode.key).startsWith(mode.emoji), true);
   }
-  assert.deepEqual(modeNames().map(({ key }) => key), ['roomies', 'cubs', 'nest', 'twinsoul', 'colleagues', 'buddies', 'crew', 'guild']);
   assert.equal(modeDefinition('couple').key, 'twinsoul');
-  assert.ok(commandsForMode('twinsoul').includes('/date')); assert.ok(commandsForMode('twinsoul').includes('/ours')); assert.ok(commandsForMode('twinsoul').includes('/mood'));
-  assert.ok(commandsForMode('nest').includes('/pickup')); assert.ok(commandsForMode('nest').includes('/sundayplan')); assert.ok(commandsForMode('nest').includes('/dinner'));
-  assert.equal(isPrimaryModeCommand('nest', '/pickup'), true); assert.equal(isPrimaryModeCommand('nest', 'party'), false);
+  assert.ok(commandsForMode('twinsoul').includes('/date'));
+  assert.ok(commandsForMode('twinsoul').includes('/ours'));
+  assert.ok(commandsForMode('twinsoul').includes('/mood'));
+  assert.ok(commandsForMode('famsquad').includes('/pickup'));
+  assert.ok(commandsForMode('famsquad').includes('/sundayplan'));
+  assert.ok(commandsForMode('famsquad').includes('/dinner'));
+  assert.equal(isPrimaryModeCommand('famsquad', '/pickup'), true);
+  assert.equal(isPrimaryModeCommand('famsquad', 'party'), false);
 });
 
 test('every advertised Telegram command has a registered handler', () => {
@@ -211,7 +343,10 @@ test('every advertised Telegram command has a registered handler', () => {
 });
 
 test('normalizes supported Telegram locale variants and falls back to English', () => {
-  assert.equal(normalizeLocale('en-GB'), 'en'); assert.equal(normalizeLocale('fr-CA'), 'fr'); assert.equal(normalizeLocale('ar-TN'), 'ar'); assert.equal(normalizeLocale('de-DE'), 'en');
+  assert.equal(normalizeLocale('en-GB'), 'en');
+  assert.equal(normalizeLocale('fr-CA'), 'fr');
+  assert.equal(normalizeLocale('ar-TN'), 'ar');
+  assert.equal(normalizeLocale('de-DE'), 'en');
 });
 
 test('translation fallback and resource completeness', () => {
@@ -288,5 +423,5 @@ test('form submissions close only after success and block duplicate requests', a
 
 test('dashboard route opens the Mini App document with required runtime assets', async () => {
   const server = startDashboardServer({ getDashboard: () => ({}), performAction: () => ({}), authenticate: () => ({}), port: 0 }); await new Promise((resolve) => server.once('listening', resolve));
-  try { const base = `http://127.0.0.1:${server.address().port}`; const response = await fetch(`${base}/app`); const html = await response.text(); assert.equal(response.status, 200); assert.match(html, /id="settings-form"/); assert.match(html, /src="\/form-submit\.js"/); assert.match(html, /src="\/app-config\.js"/); const helper = await fetch(`${base}/form-submit.js`); assert.equal(helper.status, 200); assert.match(helper.headers.get('content-type'), /application\/javascript/); const config = await fetch(`${base}/app-config.js`); assert.equal(config.status, 200); assert.match(config.headers.get('content-type'), /application\/javascript/); } finally { server.close(); }
+  try { const base = `http://127.0.0.1:${server.address().port}`; const response = await fetch(`${base}/app`); const html = await response.text(); assert.equal(response.status, 200); assert.match(html, /id="settings-form"/); assert.match(html, /data-panel="plans"/); assert.match(html, /id="plan-form"/); assert.match(html, /id="plan-expense-form"/); assert.match(html, /src="\/form-submit\.js"/); assert.match(html, /src="\/app-config\.js"/); const helper = await fetch(`${base}/form-submit.js`); assert.equal(helper.status, 200); assert.match(helper.headers.get('content-type'), /application\/javascript/); const config = await fetch(`${base}/app-config.js`); assert.equal(config.status, 200); assert.match(config.headers.get('content-type'), /application\/javascript/); } finally { server.close(); }
 });

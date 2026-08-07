@@ -57,6 +57,7 @@ cribbit-bot/
 ├── package.json                  Scripts and dependencies
 ├── package-lock.json             Dependency lock
 ├── vercel.json                   Vercel build and routing authority
+├── frontend/                     Mini App theme source built into Vercel output
 ├── README.md                     Operator/contributor handbook
 ├── requirements.md               Product and protection requirements
 ├── structure.md                  This ownership map
@@ -72,6 +73,7 @@ cribbit-bot/
 | `src/telegram-auth.js` | Signature, timestamp, and Telegram identity validation | Accept unsigned or expired data |
 | `src/dashboard-server.js` | Health, discovery, dashboard, and mutation endpoints | Return protected data before authentication and membership checks |
 | `src/dashboard-links.js` | One canonical `/app` URL shape | Generate `/app/app` or bind the global button to one group |
+| `frontend/*` | Mini App theme source | Bypass the build pipeline or talk directly to Railway |
 | `public/*` | Landing page and Mini App presentation | Store secrets or become the data authority |
 | `scripts/build-vercel.js` | Copy required assets into `dist/` | Modify source or deploy |
 
@@ -101,7 +103,7 @@ Production data belongs on the Railway volume through `DATA_DIR` or `RAILWAY_VOL
 | `GET` | `/api/dashboard?chatId=…` | Valid `initData` and active membership | Load one house |
 | `POST` | `/api/action` | Valid `initData` and active membership | Run an allow-listed mutation |
 
-Vercel `/app` is canonical. `/dashboard` is a compatibility alias that returns the same `app.html`.
+Vercel `/app` is canonical. `/dashboard` is a compatibility alias that returns the same Mini App document.
 
 ## Telegram launch paths
 
