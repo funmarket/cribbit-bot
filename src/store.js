@@ -306,6 +306,19 @@ function createJsonStore(dataFile) {
     if (status === 'done' && request.status !== 'accepted') throw Object.assign(new Error('Accept the request before marking it done.'), { statusCode: 409 });
     request.status = status; request.updatedAt = now(); request.updatedBy = cleanName(actor); addActivity(chatId, `request.${status}`, `${actor} ${status} a request`, actor, { requestId: request.id }); save(); return request;
   }
+  function remindRequest(chatId, identifier, actor, profile) {
+    const request = list('requests', chatId).find((item) => item.id === identifier);
+    if (!request) return null;
+    if (!profile || (request.fromMemberId && request.fromMemberId !== profile.id) || cleanName(actor).toLowerCase() !== request.from.toLowerCase()) {
+      throw Object.assign(new Error('Only the person who sent the request can remind about it.'), { statusCode: 403 });
+    }
+    const recipient = request.toMemberId ? list('memberProfiles', chatId).find((member) => member.id === request.toMemberId && member.active) : activeProfileByName(chatId, request.to);
+    if (!recipient) throw Object.assign(new Error('Request recipient is no longer active.'), { statusCode: 404 });
+    addNotification(chatId, recipient, 'request.reminder', `${actor} reminded you about a request`, { requestId: request.id });
+    addActivity(chatId, 'request.reminded', `${actor} reminded ${recipient.displayName} about a request`, actor, { requestId: request.id });
+    save();
+    return request;
+  }
   function findSettlementRequest(chatId, identifier) { return list('settlementRequests', chatId).find((item) => item.id === identifier) || null; }
   function requestSettlement(chatId, details, actor, profile) {
     const from = cleanName(details.from || actor); const to = cleanName(details.to); const amountCents = Math.round(Number(details.amountCents));
@@ -375,7 +388,7 @@ function createJsonStore(dataFile) {
   function markUpdate(updateId) { if (updateId == null) return true; if (state.processedUpdates[updateId]) return false; state.processedUpdates[updateId] = now(); const ids = Object.keys(state.processedUpdates); if (ids.length > 1000) ids.slice(0, ids.length - 1000).forEach((id) => delete state.processedUpdates[id]); save(); return true; }
 
   function clear(chatId) { for (const key of ['expenses', 'expenseClaims', 'chores', 'members', 'memberProfiles', 'groceries', 'funds', 'wishlists', 'requests', 'notifications', 'settlementRequests', 'corrections', 'notes', 'plans', 'activity', 'settings']) state[key][chatId] = key === 'settings' ? defaultSettings() : []; save(); }
-  return { driver: 'json', state, save, registerMember, isMember, memberByTelegramId, housesForTelegramId, activeChatId, setActiveChatId, clearActiveChatId, memberNames, addExpense, listExpenseClaims, addExpenseClaim, reviewExpenseClaim, activeExpenses, lastExpense, findExpense, voidExpense, addChore, findChore, updateChore, submitChoreForReview, reviewChore, deleteChore, addGrocery, updateGrocery, deleteGrocery, addFund, findFund, chipInFund, addWishlist, findWishlist, updateWishlistMembership, chipInWishlist, claimWishlist, addRequest, updateRequest, requestSettlement, reviewSettlement, addPlan, findPlan, joinPlan, leavePlan, addPlanItem, claimPlanItem, updatePlanStatus, addPlanExpense, addCorrection, findCorrection, updateCorrection, addNote, listNotes, updateSettings, dashboard, addActivity, markUpdate, clear, settings, userLocale, setUserLocale, resolveLocale };
+  return { driver: 'json', state, save, registerMember, isMember, memberByTelegramId, housesForTelegramId, activeChatId, setActiveChatId, clearActiveChatId, memberNames, addExpense, listExpenseClaims, addExpenseClaim, reviewExpenseClaim, activeExpenses, lastExpense, findExpense, voidExpense, addChore, findChore, updateChore, submitChoreForReview, reviewChore, deleteChore, addGrocery, updateGrocery, deleteGrocery, addFund, findFund, chipInFund, addWishlist, findWishlist, updateWishlistMembership, chipInWishlist, claimWishlist, addRequest, updateRequest, remindRequest, requestSettlement, reviewSettlement, addPlan, findPlan, joinPlan, leavePlan, addPlanItem, claimPlanItem, updatePlanStatus, addPlanExpense, addCorrection, findCorrection, updateCorrection, addNote, listNotes, updateSettings, dashboard, addActivity, markUpdate, clear, settings, userLocale, setUserLocale, resolveLocale };
 }
 
 function createStore(dataFile) {

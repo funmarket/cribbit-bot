@@ -120,6 +120,8 @@ test('wishlists and requests persist without creating debt and enforce the recip
   assert.equal(store.dashboard('123').wishlists[0].claimedBy, 'Maya');
   const request = store.addRequest('123', { to: 'Maya', type: 'bring', message: 'Can you bring the cooler?', relatedType: 'wishlist', relatedId: wish.id }, 'Alex', alex);
   assert.equal(store.dashboard('123', maya).notifications.length, 1);
+  store.remindRequest('123', request.id, 'Alex', alex);
+  assert.equal(store.dashboard('123', maya).notifications.length, 2);
   assert.throws(() => store.updateRequest('123', request.id, 'accepted', 'Alex', alex), /recipient/i);
   store.updateRequest('123', request.id, 'accepted', 'Maya', maya);
   store.updateRequest('123', request.id, 'done', 'Maya', maya);

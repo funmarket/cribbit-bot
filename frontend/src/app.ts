@@ -1978,7 +1978,11 @@ function renderRequests() {
         openEntity(b.dataset.requestOpenView, b.dataset.requestOpenId)),
   );
   $$("[data-request-remind]").forEach(
-    (b) => (b.onclick = () => toast("Reminder queued for this roomie.")),
+    (b) =>
+      (b.onclick = () =>
+        apiAction("request.remind", {
+          requestId: b.dataset.requestRemind,
+        }).catch((e) => toast(e.message, true))),
   );
 }
 function renderWishlistHub() {
