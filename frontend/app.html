@@ -61,50 +61,64 @@
     </section>
     <div class="app-frame" hidden="" id="app">
       <aside class="sidebar">
-        <div class="brand-row">
+        <button
+          aria-label="Go to Home"
+          class="brand-row brand-home-button"
+          id="brand-home-button"
+          type="button"
+        >
           <img alt="Cribbit" class="app-logo" src="/logo.png" /><span
             class="brand-word"
             >Cribbit</span
           >
-        </div>
-        <button
-          aria-haspopup="dialog"
-          class="house-card"
-          id="house-switcher-button"
-          type="button"
-        >
-          <span aria-hidden="true" class="house-icon">
-            <svg
-              class="icon-svg sm"
-              fill="none"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="1.8"
-              viewbox="0 0 24 24"
-            >
-              <path
-                d="M4.5 10.2 12 4l7.5 6.2v8.3a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5z"
-              ></path>
-              <path d="M9.3 20v-6.3h5.4V20"></path>
-            </svg>
-          </span>
-          <span
-            ><small>YOUR CRIB</small
-            ><strong id="house-name-side">My Crib</strong></span
-          >
-          <span aria-hidden="true" class="chevron"
-            ><svg
-              class="icon-svg sm"
-              fill="none"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-width="1.8"
-              viewbox="0 0 24 24"
-            >
-              <path d="m8.5 10 3.5 3.5 3.5-3.5"></path></svg
-          ></span>
         </button>
+        <div class="crib-dropdown sidebar-crib-dropdown">
+          <button
+            aria-expanded="false"
+            aria-haspopup="menu"
+            class="house-card"
+            id="house-switcher-button"
+            type="button"
+          >
+            <span aria-hidden="true" class="house-icon">
+              <svg
+                class="icon-svg sm"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="1.8"
+                viewbox="0 0 24 24"
+              >
+                <path
+                  d="M4.5 10.2 12 4l7.5 6.2v8.3a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5z"
+                ></path>
+                <path d="M9.3 20v-6.3h5.4V20"></path>
+              </svg>
+            </span>
+            <span
+              ><small>YOUR CRIB</small
+              ><strong id="house-name-side">My Crib</strong></span
+            >
+            <span aria-hidden="true" class="chevron"
+              ><svg
+                class="icon-svg sm"
+                fill="none"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-width="1.8"
+                viewbox="0 0 24 24"
+              >
+                <path d="m8.5 10 3.5 3.5 3.5-3.5"></path></svg
+            ></span>
+          </button>
+          <div
+            class="crib-dropdown-menu"
+            hidden=""
+            id="sidebar-crib-menu"
+            role="menu"
+          ></div>
+        </div>
         <nav aria-label="Main navigation" class="side-nav">
           <button class="active" data-view="overview">
             <svg
@@ -286,26 +300,43 @@
       <div class="app-main">
         <header class="mobile-header">
           <button
-            aria-haspopup="dialog"
-            class="mobile-house-switcher"
-            id="mobile-house-switcher"
+            aria-label="Go to Home"
+            class="mobile-home-button"
+            id="mobile-home-button"
             type="button"
           >
-            <img alt="Cribbit" src="/logo.png" /><span
-              ><small>YOUR CRIB</small
-              ><strong id="house-name-mobile">My Crib</strong></span
-            ><b class="chevron"
-              ><svg
-                class="icon-svg sm"
-                fill="none"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-width="1.8"
-                viewbox="0 0 24 24"
-              >
-                <path d="m8.5 10 3.5 3.5 3.5-3.5"></path></svg
-            ></b>
+            <img alt="Cribbit" src="/logo.png" />
           </button>
+          <div class="crib-dropdown mobile-crib-dropdown">
+            <button
+              aria-expanded="false"
+              aria-haspopup="menu"
+              class="mobile-house-switcher"
+              id="mobile-house-switcher"
+              type="button"
+            >
+              <span
+                ><small>YOUR CRIB</small
+                ><strong id="house-name-mobile">My Crib</strong></span
+              ><b class="chevron"
+                ><svg
+                  class="icon-svg sm"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-width="1.8"
+                  viewbox="0 0 24 24"
+                >
+                  <path d="m8.5 10 3.5 3.5 3.5-3.5"></path></svg
+              ></b>
+            </button>
+            <div
+              class="crib-dropdown-menu mobile-crib-menu"
+              hidden=""
+              id="mobile-crib-menu"
+              role="menu"
+            ></div>
+          </div>
           <button
             aria-label="Toggle light and dark mode"
             class="mobile-theme"

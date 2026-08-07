@@ -3054,12 +3054,20 @@ function syncCribUrl() {
   next.searchParams.set("chatId", chatId);
   history.replaceState(null, "", next);
 }
-function renderCribChoices(container) {
+function renderCribChoices(container, { limit = Infinity, menu = false } = {}) {
   if (!container) return;
-  container.innerHTML = availableHouses
+  const choices = Number.isFinite(limit)
+    ? [...availableHouses].sort(
+        (left, right) =>
+          Number(String(right.chatId) === String(chatId)) -
+          Number(String(left.chatId) === String(chatId)),
+      )
+    : availableHouses;
+  container.innerHTML = choices
+    .slice(0, limit)
     .map(
       (house) =>
-        `<button class="secondary-button" type="button" data-crib-id="${escapeHtml(house.chatId)}" ${String(house.chatId) === String(chatId) ? 'aria-current="true"' : ""}><span>${escapeHtml(house.houseName)}</span><small>${escapeHtml(house.role)}${String(house.chatId) === String(chatId) ? " · Current" : ""}</small></button>`,
+        `<button${menu ? ' role="menuitem"' : ' class="secondary-button"'} type="button" data-crib-id="${escapeHtml(house.chatId)}" ${String(house.chatId) === String(chatId) ? 'aria-current="true"' : ""}><span>${escapeHtml(house.houseName)}</span><small>${escapeHtml(house.role)}${String(house.chatId) === String(chatId) ? " · Current" : ""}</small></button>`,
     )
     .join("");
   container
@@ -3071,6 +3079,28 @@ function renderCribChoices(container) {
             toast(error.message, true),
           )),
     );
+}
+function closeCribDropdowns() {
+  $$(".crib-dropdown-menu").forEach((menu) => (menu.hidden = true));
+  $("#house-switcher-button")?.setAttribute("aria-expanded", "false");
+  $("#mobile-house-switcher")?.setAttribute("aria-expanded", "false");
+}
+async function toggleCribDropdown(trigger, menu) {
+  const opening = menu.hidden;
+  closeCribDropdowns();
+  if (!opening) return;
+  if (demoMode) {
+    toast(
+      "Crib switching is available after opening Cribbit through Telegram.",
+    );
+    return;
+  }
+  await fetchHouses();
+  if (!availableHouses.length)
+    throw new Error("No active Telegram group Cribs were found.");
+  renderCribChoices(menu, { limit: 4, menu: true });
+  menu.hidden = false;
+  trigger.setAttribute("aria-expanded", "true");
 }
 async function switchCrib(targetChatId) {
   if (switchingCrib) return;
@@ -3092,6 +3122,7 @@ async function switchCrib(targetChatId) {
     $("#app").hidden = false;
     const dialog = $("#crib-switcher-modal");
     if (dialog.open) dialog.close();
+    closeCribDropdowns();
     toast(`Opened ${data.settings.houseName}.`);
   } finally {
     switchingCrib = false;
@@ -3283,14 +3314,34 @@ document.addEventListener("click", (event) => {
   );
 })();
 [
-  "#house-switcher-button",
-  "#mobile-house-switcher",
-  "#settings-switch-crib",
-].forEach((selector) =>
-  $(selector).addEventListener("click", () =>
-    openCribSwitcher().catch((error) => toast(error.message, true)),
-  ),
+  ["#house-switcher-button", "#sidebar-crib-menu"],
+  ["#mobile-house-switcher", "#mobile-crib-menu"],
+].forEach(([triggerSelector, menuSelector]) => {
+  const trigger = $(triggerSelector);
+  const menu = $(menuSelector);
+  trigger.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleCribDropdown(trigger, menu).catch((error) =>
+      toast(error.message, true),
+    );
+  });
+});
+$("#settings-switch-crib").addEventListener("click", () =>
+  openCribSwitcher().catch((error) => toast(error.message, true)),
 );
+function goHome() {
+  closeCribDropdowns();
+  showView("overview");
+  document.querySelector(".bottom-nav")?.classList.remove("nav-hidden");
+}
+$("#brand-home-button").addEventListener("click", goHome);
+$("#mobile-home-button").addEventListener("click", goHome);
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".crib-dropdown")) closeCribDropdowns();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeCribDropdowns();
+});
 $$("[data-modal]").forEach((button) =>
   button.addEventListener("click", () => {
     if (
@@ -3304,6 +3355,20 @@ $$("[data-modal]").forEach((button) =>
 );
 $$("[data-close]").forEach((button) =>
   button.addEventListener("click", () => button.closest("dialog").close()),
+);
+$$("dialog").forEach((dialog) =>
+  dialog.addEventListener("click", (event) => {
+    if (event.target !== dialog) return;
+    const content = dialog.firstElementChild;
+    if (!content) return;
+    const bounds = content.getBoundingClientRect();
+    const outside =
+      event.clientX < bounds.left ||
+      event.clientX > bounds.right ||
+      event.clientY < bounds.top ||
+      event.clientY > bounds.bottom;
+    if (outside) dialog.close();
+  }),
 );
 $$("[data-wishlist-toggle]").forEach((btn) =>
   btn.addEventListener("click", () =>
@@ -3446,24 +3511,6 @@ $("#request-related")?.addEventListener("change", (event) => {
       if (!Number.isNaN(d.getTime())) due.value = d.toISOString().slice(0, 10);
     }
   }
-});
-$$(".app-logo").forEach((logo) => {
-  logo.setAttribute("role", "button");
-  logo.setAttribute("tabindex", "0");
-  logo.setAttribute("aria-label", "Go to Home");
-  const goHome = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    showView("overview");
-    document.querySelector(".bottom-nav")?.classList.remove("nav-hidden");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-  logo.addEventListener("click", goHome);
-  logo.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      goHome(event);
-    }
-  });
 });
 $("#request-form").addEventListener("submit", async (event) => {
   event.preventDefault();
