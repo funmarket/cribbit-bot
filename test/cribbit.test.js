@@ -71,6 +71,67 @@ test('persists crib mode settings and normalizes invalid values', (t) => {
   assert.equal(createStore(file).dashboard('123').settings.cribMode, 'classic');
 });
 
+test('payment claims stay out of balances until an authorized non-claimant approves them once', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-claims-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const store = createStore(path.join(directory, 'data.json'));
+  const owner = store.registerMember('123', { id: 1, first_name: 'Alex' }, 'Oak Street');
+  const maya = store.registerMember('123', { id: 2, first_name: 'Maya' }, 'Oak Street');
+  const claim = store.addExpenseClaim('123', { description: 'Paper towels', amountCents: 1299, paidBy: 'Maya', receiptText: 'TOTAL 12.99', submittedById: maya.id }, 'Maya');
+  assert.equal(store.dashboard('123').expenses.length, 0);
+  assert.throws(() => store.reviewExpenseClaim('123', claim.id, 'approved', 'Maya', maya), /owner or admin/i);
+  maya.role = 'admin';
+  assert.throws(() => store.reviewExpenseClaim('123', claim.id, 'approved', 'Maya', maya), /cannot review your own/i);
+  const approved = store.reviewExpenseClaim('123', claim.id, 'approved', 'Alex', owner);
+  assert.equal(approved.status, 'approved');
+  assert.ok(approved.approvedExpenseId);
+  assert.equal(store.dashboard('123').expenses.length, 1);
+  assert.equal(store.dashboard('123').expenses[0].amountCents, 1299);
+  assert.equal(store.reviewExpenseClaim('123', claim.id, 'approved', 'Alex', owner), null);
+});
+
+test('chores use explicit review states and require feedback for needs fixing', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-chore-review-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const store = createStore(path.join(directory, 'data.json'));
+  const owner = store.registerMember('123', { id: 1, first_name: 'Alex' }, 'Oak Street');
+  const maya = store.registerMember('123', { id: 2, first_name: 'Maya' }, 'Oak Street');
+  const chore = store.addChore('123', { task: 'Clean the kitchen', assignedTo: 'Maya' }, 'Alex');
+  store.submitChoreForReview('123', chore.id, 'Maya', maya);
+  assert.equal(store.findChore('123', chore.id).status, 'pending_review');
+  assert.throws(() => store.reviewChore('123', chore.id, 'needs_fixing', 'Alex', owner), /requires feedback/i);
+  store.reviewChore('123', chore.id, 'needs_fixing', 'Alex', owner, 'Please wipe the counters too.');
+  assert.equal(store.findChore('123', chore.id).status, 'needs_fixing');
+  store.submitChoreForReview('123', chore.id, 'Maya', maya, true);
+  store.reviewChore('123', chore.id, 'approved', 'Alex', owner);
+  assert.equal(store.findChore('123', chore.id).status, 'verified_completed');
+  assert.equal(store.findChore('123', chore.id).done, true);
+});
+
+test('wishlists and requests persist without creating debt and enforce the recipient identity', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-coordination-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const store = createStore(path.join(directory, 'data.json'));
+  const alex = store.registerMember('123', { id: 1, first_name: 'Alex' }, 'Oak Street');
+  const maya = store.registerMember('123', { id: 2, first_name: 'Maya' }, 'Oak Street');
+  const wish = store.addWishlist('123', { area: 'groceries', title: 'BBQ supplies', targetCents: 5000 }, 'Alex', alex);
+  store.updateWishlistMembership('123', wish.id, 'Maya', maya, true);
+  assert.equal(store.dashboard('123').balances.totalSpentCents, 0);
+  store.chipInWishlist('123', wish.id, 1200, 'Maya', maya);
+  assert.equal(store.dashboard('123').balances.totalSpentCents, 0);
+  store.claimWishlist('123', wish.id, 'Maya', maya);
+  assert.equal(store.dashboard('123').wishlists[0].claimedBy, 'Maya');
+  const request = store.addRequest('123', { to: 'Maya', type: 'bring', message: 'Can you bring the cooler?', relatedType: 'wishlist', relatedId: wish.id }, 'Alex', alex);
+  assert.equal(store.dashboard('123', maya).notifications.length, 1);
+  assert.throws(() => store.updateRequest('123', request.id, 'accepted', 'Alex', alex), /recipient/i);
+  store.updateRequest('123', request.id, 'accepted', 'Maya', maya);
+  store.updateRequest('123', request.id, 'done', 'Maya', maya);
+  assert.equal(store.dashboard('123').requests[0].status, 'done');
+});
+
+test('the Vite planId action payload remains compatible with existing plan actions', (t) => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
+  assert.match(source, /store\.joinPlan\(chatId, payload\.id \|\| payload\.planId/);
+  assert.match(source, /store\.leavePlan\(chatId, payload\.id \|\| payload\.planId/);
+});
+
 test('persists funds, corrections, house rules, quiet hours, and planning notes', (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-features-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true })); const file = path.join(directory, 'data.json');
   const store = createStore(file); store.registerMember('123', { id: 42, first_name: 'Alex' }, 'Oak Street');

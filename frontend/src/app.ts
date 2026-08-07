@@ -776,9 +776,10 @@ function renderChores(items, target, preview = false) {
   );
   const shown = preview ? actionable.slice(0, 3) : items;
   const buttonFor = (chore) => {
-    return chore.done
-      ? `<button class="row-action" data-chore-toggle="${escapeHtml(chore.id)}" data-done="false">Reopen</button>`
-      : `<button class="row-action" data-chore-toggle="${escapeHtml(chore.id)}" data-done="true">Mark done</button>`;
+    const state = choreStatus(chore);
+    if (state === "open") return `<button class="row-action" data-chore-submit="${escapeHtml(chore.id)}">Mark done</button>`;
+    if (state === "needs_fixing") return `<button class="row-action" data-chore-resubmit="${escapeHtml(chore.id)}">Fix & resubmit</button>`;
+    return "";
   };
   if (preview) {
     target.innerHTML = shown.length
@@ -1588,7 +1589,7 @@ function renderExpenseApprovals() {
   $$("[data-expense-approve]").forEach(
     (b) =>
       (b.onclick = () =>
-        apiAction("expense.approve", {
+        apiAction("payment.claim.approve", {
           claimId: b.dataset.expenseApprove,
         }).catch((e) => toast(e.message, true))),
   );
@@ -2556,9 +2557,17 @@ function toast(message, error = false) {
   toast.timer = setTimeout(() => (node.hidden = true), 3200);
 }
 
+function normalizeActionName(action) {
+  if (action === "expense.submit") return "payment.claim.submit";
+  if (action === "expense.approve") return "payment.claim.approve";
+  if (action === "expense.reject") return "payment.claim.reject";
+  return action;
+}
+
 async function apiAction(action, payload) {
+  const normalizedAction = normalizeActionName(action);
   if (demoMode) {
-    demoAction(action, payload);
+    demoAction(normalizedAction, payload);
     render();
     toast(t("dashboard.demoUpdated"));
     return;
@@ -2569,7 +2578,7 @@ async function apiAction(action, payload) {
       "Content-Type": "application/json",
       "X-Telegram-Init-Data": initData,
     },
-    body: JSON.stringify({ chatId, action, payload }),
+    body: JSON.stringify({ chatId, action: normalizedAction, payload }),
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok)
@@ -2869,7 +2878,7 @@ function demoAction(action, payload) {
     );
     if (w) w.claimedBy = w.claimedBy === actor ? null : actor;
   }
-  if (action === "expense.submit") {
+  if (action === "payment.claim.submit") {
     data.expenseClaims = data.expenseClaims || [];
     data.expenseClaims.unshift({
       id: `demo-x-${Date.now()}`,
@@ -2888,7 +2897,7 @@ function demoAction(action, payload) {
       submittedBy: actor,
     });
   }
-  if (action === "expense.approve") {
+  if (action === "payment.claim.approve") {
     const claim = (data.expenseClaims || []).find(
       (c) => String(c.id) === String(payload.claimId),
     );
@@ -2912,7 +2921,7 @@ function demoAction(action, payload) {
         (Number(data.balances.totalSpentCents) || 0) + claim.amountCents;
     }
   }
-  if (action === "expense.reject") {
+  if (action === "payment.claim.reject") {
     const claim = (data.expenseClaims || []).find(
       (c) => String(c.id) === String(payload.claimId),
     );
@@ -2929,11 +2938,11 @@ function demoAction(action, payload) {
     data.viewer.locale = payload.locale;
   }
   const activityMessage =
-    action === "expense.submit"
+    action === "payment.claim.submit"
       ? `${actor} submitted a payment claim for review`
-      : action === "expense.approve"
+      : action === "payment.claim.approve"
         ? `${actor} approved a payment claim`
-        : action === "expense.reject"
+        : action === "payment.claim.reject"
           ? `${actor} rejected a payment claim`
           : action === "chore.complete.submit"
             ? `${actor} submitted a chore for review`
@@ -3170,6 +3179,8 @@ async function chooseHouse() {
   return false;
 }
 function bindDynamicActions() {
+  $$('[data-chore-submit]').forEach((button) => (button.onclick = () => apiAction('chore.complete.submit', { choreId: button.dataset.choreSubmit }).catch((e) => toast(e.message, true))));
+  $$('[data-chore-resubmit]').forEach((button) => (button.onclick = () => apiAction('chore.review.resubmit', { choreId: button.dataset.choreResubmit }).catch((e) => toast(e.message, true))));
   $$("[data-chore-toggle]").forEach(
     (button) =>
       (button.onclick = () =>
@@ -3461,9 +3472,49 @@ $("#expense-receipt-camera").addEventListener("change", (event) => {
 });
 $("#scan-receipt").addEventListener("click", () => scanReceiptLocal());
 $("#cloud-scan-receipt").addEventListener("click", () => scanReceiptCloud());
-$("#expense-form").addEventListener("submit", (event) =>
-  submitForm(event, "expense.add", $("#expense-modal")),
-);
+$("#expense-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!activeReceiptFile) {
+    toast("Take a photo or upload a receipt before submitting.", true);
+    return;
+  }
+  const values = new FormData(form);
+  const amount = Number(values.get("amount"));
+  const description = String(values.get("description") || "").trim();
+  if (!description || !Number.isFinite(amount) || amount <= 0) {
+    toast("Enter a description and a valid expense amount.", true);
+    return;
+  }
+  const parsed = parseReceiptText(String(values.get("receiptText") || ""));
+  return runFormSubmission({
+    form,
+    dialog: $("#expense-modal"),
+    submitButton: form.querySelector('[type="submit"]'),
+    save: () =>
+      apiAction("payment.claim.submit", {
+        description,
+        amountCents: Math.round(amount * 100),
+        paidBy: String(values.get("paidBy") || data.viewer?.displayName || ""),
+        category: String(values.get("category") || "Other"),
+        notes: String(values.get("notes") || "").trim(),
+        receiptText: parsed.text,
+        receiptConfidence: Number(values.get("receiptConfidence") || 0),
+        receiptItems: parsed.items,
+        receiptUrl: activeReceiptDataUrl,
+      }),
+    onError: (error) => toast(error.message, true),
+  }).then((saved) => {
+    if (!saved) return;
+    activeReceiptDataUrl = "";
+    activeReceiptFile = null;
+    $("#receipt-preview").classList.remove("visible");
+    $("#ocr-items").classList.remove("visible");
+    setOcrStatus("Upload a receipt to begin.");
+    toast("Payment claim submitted for admin review.");
+    showView("expenses");
+  });
+});
 $("#expense-reject-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const fd = new FormData(event.currentTarget);
@@ -3475,7 +3526,7 @@ $("#expense-reject-form").addEventListener("submit", async (event) => {
   }
   $("#expense-reject-modal").close();
   try {
-    await apiAction("expense.reject", { claimId, comment });
+    await apiAction("payment.claim.reject", { claimId, comment });
     event.currentTarget.reset();
   } catch (e) {
     toast(e.message, true);
