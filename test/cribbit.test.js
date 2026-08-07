@@ -126,6 +126,23 @@ test('wishlists and requests persist without creating debt and enforce the recip
   assert.equal(store.dashboard('123').requests[0].status, 'done');
 });
 
+test('settlements require the debtor and recipient, then persist a confirmed balance adjustment', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'cribbit-settlements-')); t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const store = createStore(path.join(directory, 'data.json'));
+  const alex = store.registerMember('123', { id: 1, first_name: 'Alex' }, 'Oak Street');
+  const maya = store.registerMember('123', { id: 2, first_name: 'Maya' }, 'Oak Street');
+  store.addExpense('123', { amount: 20, description: 'Dinner', paidBy: 'Alex', participants: ['Alex', 'Maya'] }, 'Alex');
+  const settlement = store.dashboard('123').balances.settlements[0];
+  assert.deepEqual({ from: settlement.from, to: settlement.to, amountCents: settlement.amountCents }, { from: 'Maya', to: 'Alex', amountCents: 1000 });
+  assert.throws(() => store.requestSettlement('123', settlement, 'Alex', alex), /own settlement/i);
+  const request = store.requestSettlement('123', settlement, 'Maya', maya);
+  assert.equal(store.dashboard('123', alex).notifications[0].type, 'settlement.pending');
+  assert.throws(() => store.reviewSettlement('123', request.id, 'confirmed', 'Maya', maya), /recipient/i);
+  store.reviewSettlement('123', request.id, 'confirmed', 'Alex', alex);
+  assert.equal(store.dashboard('123').balances.settlements.length, 0);
+  assert.equal(store.reviewSettlement('123', request.id, 'confirmed', 'Alex', alex), null);
+});
+
 test('the Vite planId action payload remains compatible with existing plan actions', (t) => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
   assert.match(source, /store\.joinPlan\(chatId, payload\.id \|\| payload\.planId/);

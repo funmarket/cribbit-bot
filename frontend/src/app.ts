@@ -1641,6 +1641,18 @@ function getPersonalNotifications() {
   const out = [];
   const push = (n) =>
     out.push({ ...n, createdAt: n.createdAt || new Date().toISOString() });
+  (data.notifications || []).forEach((n) =>
+    push({
+      id: `server:${n.id}`,
+      type: String(n.type || "notification").split(".")[0],
+      tone: "attention",
+      title: n.type === "settlement.pending" ? "Confirm a payment you received" : "New crib notification",
+      body: n.message,
+      createdAt: n.createdAt,
+      view: n.type?.startsWith("request") ? "requests" : "expenses",
+      entityId: n.metadata?.requestId || n.metadata?.settlementRequestId || "",
+    }),
+  );
   if (admin)
     (data.expenseClaims || [])
       .filter(

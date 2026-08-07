@@ -1,5 +1,5 @@
 const fs = require('fs');
-const { calculateBalances } = require('./balances');
+const { calculateBalances, simplifyDebts } = require('./balances');
 const { cleanName, createExpense, uniqueNames } = require('./expenses');
 const { normalizeLocale } = require('./i18n');
 const { DEFAULT_MODE, normalizeMode } = require('./modes');
@@ -306,6 +306,27 @@ function createJsonStore(dataFile) {
     if (status === 'done' && request.status !== 'accepted') throw Object.assign(new Error('Accept the request before marking it done.'), { statusCode: 409 });
     request.status = status; request.updatedAt = now(); request.updatedBy = cleanName(actor); addActivity(chatId, `request.${status}`, `${actor} ${status} a request`, actor, { requestId: request.id }); save(); return request;
   }
+  function findSettlementRequest(chatId, identifier) { return list('settlementRequests', chatId).find((item) => item.id === identifier) || null; }
+  function requestSettlement(chatId, details, actor, profile) {
+    const from = cleanName(details.from || actor); const to = cleanName(details.to); const amountCents = Math.round(Number(details.amountCents));
+    if (!profile || from.toLowerCase() !== cleanName(profile.displayName).toLowerCase()) throw Object.assign(new Error('You can only mark your own settlement as paid.'), { statusCode: 403 });
+    if (!to || !Number.isInteger(amountCents) || amountCents <= 0) throw Object.assign(new Error('A settlement recipient and positive amount are required.'), { statusCode: 400 });
+    const balances = calculateBalances(activeExpenses(chatId), memberNames(chatId));
+    const outstanding = balances.settlements.find((item) => item.from.toLowerCase() === from.toLowerCase() && item.to.toLowerCase() === to.toLowerCase() && item.amountCents === amountCents);
+    if (!outstanding) throw Object.assign(new Error('That settlement is no longer outstanding.'), { statusCode: 409 });
+    const recipient = activeProfileByName(chatId, to); if (!recipient) throw Object.assign(new Error('Settlement recipient is not an active roomie.'), { statusCode: 404 });
+    const duplicate = list('settlementRequests', chatId).find((item) => ['pending', 'confirmed'].includes(item.status) && item.from.toLowerCase() === from.toLowerCase() && item.to.toLowerCase() === to.toLowerCase() && item.amountCents === amountCents);
+    if (duplicate) return duplicate;
+    const request = { id: makeId('s'), from, fromMemberId: profile.id, to: recipient.displayName, toMemberId: recipient.id, amountCents, status: 'pending', requestedAt: now(), requestedBy: from };
+    list('settlementRequests', chatId).unshift(request); addNotification(chatId, recipient, 'settlement.pending', `${from} marked a ${amountCents}¢ settlement as paid`, { settlementRequestId: request.id }); addActivity(chatId, 'settlement.requested', `${from} marked a settlement to ${recipient.displayName} as paid`, actor, { settlementRequestId: request.id }); save(); return request;
+  }
+  function reviewSettlement(chatId, identifier, verdict, actor, profile) {
+    const request = findSettlementRequest(chatId, identifier); if (!request || request.status !== 'pending') return null;
+    if (!profile || request.toMemberId !== profile.id) throw Object.assign(new Error('Only the settlement recipient can confirm or decline it.'), { statusCode: 403 });
+    if (!['confirmed', 'declined'].includes(verdict)) throw Object.assign(new Error('Invalid settlement decision.'), { statusCode: 400 });
+    request.status = verdict; request.reviewedAt = now(); request.reviewedBy = cleanName(actor); request.reviewedById = profile.id;
+    addActivity(chatId, `settlement.${verdict}`, `${actor} ${verdict} a settlement from ${request.from}`, actor, { settlementRequestId: request.id }); save(); return request;
+  }
   function addCorrection(chatId, text, actor) {
     const message = String(text || '').trim().slice(0, 500);
     if (!message) throw Object.assign(new Error('Format: /corrections add <what needs correcting>'), { statusCode: 400 });
@@ -340,6 +361,11 @@ function createJsonStore(dataFile) {
   }
   function dashboard(chatId, viewer) {
     const expenses = activeExpenses(chatId); const chores = list('chores', chatId); const groceries = list('groceries', chatId); const members = list('memberProfiles', chatId); const balances = calculateBalances(expenses, memberNames(chatId));
+    for (const settlement of list('settlementRequests', chatId).filter((item) => item.status === 'confirmed')) {
+      balances.netCents[settlement.from] = (balances.netCents[settlement.from] || 0) + settlement.amountCents;
+      balances.netCents[settlement.to] = (balances.netCents[settlement.to] || 0) - settlement.amountCents;
+    }
+    balances.net = Object.fromEntries(Object.entries(balances.netCents).map(([name, cents]) => [name, cents / 100])); balances.settlements = simplifyDebts(balances.netCents, true);
     const locale = viewer?.telegramId ? resolveLocale(chatId, { id: viewer.telegramId, language_code: viewer.telegramLanguageCode }) : settings(chatId).defaultLocale;
     const cribSettings = settings(chatId);
     const viewerId = viewer?.id || null;
@@ -349,7 +375,7 @@ function createJsonStore(dataFile) {
   function markUpdate(updateId) { if (updateId == null) return true; if (state.processedUpdates[updateId]) return false; state.processedUpdates[updateId] = now(); const ids = Object.keys(state.processedUpdates); if (ids.length > 1000) ids.slice(0, ids.length - 1000).forEach((id) => delete state.processedUpdates[id]); save(); return true; }
 
   function clear(chatId) { for (const key of ['expenses', 'expenseClaims', 'chores', 'members', 'memberProfiles', 'groceries', 'funds', 'wishlists', 'requests', 'notifications', 'settlementRequests', 'corrections', 'notes', 'plans', 'activity', 'settings']) state[key][chatId] = key === 'settings' ? defaultSettings() : []; save(); }
-  return { driver: 'json', state, save, registerMember, isMember, memberByTelegramId, housesForTelegramId, activeChatId, setActiveChatId, clearActiveChatId, memberNames, addExpense, listExpenseClaims, addExpenseClaim, reviewExpenseClaim, activeExpenses, lastExpense, findExpense, voidExpense, addChore, findChore, updateChore, submitChoreForReview, reviewChore, deleteChore, addGrocery, updateGrocery, deleteGrocery, addFund, findFund, chipInFund, addWishlist, findWishlist, updateWishlistMembership, chipInWishlist, claimWishlist, addRequest, updateRequest, addPlan, findPlan, joinPlan, leavePlan, addPlanItem, claimPlanItem, updatePlanStatus, addPlanExpense, addCorrection, findCorrection, updateCorrection, addNote, listNotes, updateSettings, dashboard, addActivity, markUpdate, clear, settings, userLocale, setUserLocale, resolveLocale };
+  return { driver: 'json', state, save, registerMember, isMember, memberByTelegramId, housesForTelegramId, activeChatId, setActiveChatId, clearActiveChatId, memberNames, addExpense, listExpenseClaims, addExpenseClaim, reviewExpenseClaim, activeExpenses, lastExpense, findExpense, voidExpense, addChore, findChore, updateChore, submitChoreForReview, reviewChore, deleteChore, addGrocery, updateGrocery, deleteGrocery, addFund, findFund, chipInFund, addWishlist, findWishlist, updateWishlistMembership, chipInWishlist, claimWishlist, addRequest, updateRequest, requestSettlement, reviewSettlement, addPlan, findPlan, joinPlan, leavePlan, addPlanItem, claimPlanItem, updatePlanStatus, addPlanExpense, addCorrection, findCorrection, updateCorrection, addNote, listNotes, updateSettings, dashboard, addActivity, markUpdate, clear, settings, userLocale, setUserLocale, resolveLocale };
 }
 
 function createStore(dataFile) {
