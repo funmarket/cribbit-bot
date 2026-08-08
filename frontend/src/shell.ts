@@ -23,7 +23,6 @@ const shellHtml = String.raw`<!doctype html>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
-    <script src="/src/main.ts" type="module"></script>
   </head>
   <body>
     <div aria-live="polite" class="loading-screen" id="loading">
