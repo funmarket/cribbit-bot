@@ -1,4 +1,4 @@
-<!doctype html>
+const shellHtml = String.raw`<!doctype html>
 
 <html data-theme="light" lang="en">
   <head>
@@ -2186,3 +2186,10 @@
     </dialog>
   </body>
 </html>
+`;
+
+document.open();
+document.write(shellHtml);
+document.close();
+
+export {};

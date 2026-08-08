@@ -4,7 +4,7 @@ import "./vendor";
 import "./i18n";
 import "./forms";
 import "./config";
+import "./shell";
 import "./app";
 import "./enhancements";
 import "./local-preview";
-import "./feature-gates";
