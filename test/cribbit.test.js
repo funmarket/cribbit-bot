@@ -235,13 +235,14 @@ test('selects only an available saved Crib and otherwise auto-selects a sole mem
 });
 
 test('uses private Web App buttons only in private chats and group-safe Main App links in groups', () => {
-  const env = { MINI_APP_URL: 'https://cribbit-dashboard-sigma.vercel.app', RAILWAY_PUBLIC_DOMAIN: 'cribbit-production.up.railway.app' };
+  const env = { MINI_APP_URL: 'https://cribbit-dashboard-sigma.vercel.app', RAILWAY_PUBLIC_DOMAIN: 'cribbit-production.up.railway.app', MINI_APP_VERSION: '20260808' };
   const privateMarkup = dashboardReplyMarkup(env, { chatId: 42, chatType: 'private', botUsername: 'Cribbit_bot', view: 'expenses', text: 'Open Cribbit' });
-  assert.deepEqual(privateMarkup, { inline_keyboard: [[{ text: 'Open Cribbit', web_app: { url: 'https://cribbit-dashboard-sigma.vercel.app/app?chatId=42&view=expenses&apiBaseUrl=https%3A%2F%2Fcribbit-production.up.railway.app' } }]] });
+  assert.deepEqual(privateMarkup, { inline_keyboard: [[{ text: 'Open Cribbit', web_app: { url: 'https://cribbit-dashboard-sigma.vercel.app/app?chatId=42&view=expenses&apiBaseUrl=https%3A%2F%2Fcribbit-production.up.railway.app&v=20260808' } }]] });
 
   const groupMarkup = dashboardReplyMarkup(env, { chatId: -1001, chatType: 'supergroup', botUsername: '@Cribbit_bot', view: 'chores', text: 'Open Cribbit' });
   assert.deepEqual(groupMarkup, { inline_keyboard: [[{ text: 'Open Cribbit', url: 'https://t.me/Cribbit_bot?startapp' }]] });
   assert.equal('web_app' in groupMarkup.inline_keyboard[0][0], false);
+  assert.equal(menuAppUrl(env), 'https://cribbit-dashboard-sigma.vercel.app/app?v=20260808');
   assert.equal(mainAppUrl('@Cribbit_bot'), 'https://t.me/Cribbit_bot?startapp');
 });
 
