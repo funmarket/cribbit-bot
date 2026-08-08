@@ -14,6 +14,24 @@ const apiBaseUrl = resolveApiBaseUrl(
   location.origin,
 );
 const initData = telegram?.initData || "";
+const startParam = telegram?.initDataUnsafe?.start_param || query.get("startapp") || query.get("start_param");
+function parseLaunchChatId(raw) {
+  const value = String(raw || "").trim();
+  if (!value) return null;
+  try {
+    const decoded = decodeURIComponent(value);
+    if (/^-?\d+$/.test(decoded)) return decoded;
+    const compact = decoded.match(/^(?:chatId|chat|house)=(.+)$/i);
+    if (compact?.[1]) return compact[1].trim() || null;
+    const parsed = JSON.parse(decoded);
+    if (parsed && typeof parsed.chatId !== "undefined") return String(parsed.chatId).trim() || null;
+  } catch {
+    /* ignored: malformed launch context falls back to normal house discovery */
+  }
+  return null;
+}
+const launchChatId = parseLaunchChatId(startParam);
+if (!chatId && launchChatId) chatId = launchChatId;
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const escapeHtml = (value) =>
