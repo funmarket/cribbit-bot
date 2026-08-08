@@ -213,9 +213,9 @@ test('persists an authorized active Crib and clears it when membership becomes i
 });
 
 test('builds canonical inline and global menu Mini App URLs', () => {
-  const env = { MINI_APP_URL: 'https://cribbit-dashboard-sigma.vercel.app/app', RAILWAY_PUBLIC_DOMAIN: 'cribbit-production.up.railway.app' };
-  assert.equal(dashboardUrl(env, -1001), 'https://cribbit-dashboard-sigma.vercel.app/app?chatId=-1001&apiBaseUrl=https%3A%2F%2Fcribbit-production.up.railway.app');
-  assert.equal(menuAppUrl(env), 'https://cribbit-dashboard-sigma.vercel.app/app');
+  const env = { MINI_APP_URL: 'https://cribbit-dashboard-sigma.vercel.app/app', RAILWAY_PUBLIC_DOMAIN: 'cribbit-production.up.railway.app', MINI_APP_VERSION: '20260808' };
+  assert.equal(dashboardUrl(env, -1001), 'https://cribbit-dashboard-sigma.vercel.app/app?chatId=-1001&apiBaseUrl=https%3A%2F%2Fcribbit-production.up.railway.app&v=20260808');
+  assert.equal(menuAppUrl(env), 'https://cribbit-dashboard-sigma.vercel.app/app?v=20260808');
 });
 
 test('uses a valid API override and safely falls back to the current app origin', () => {

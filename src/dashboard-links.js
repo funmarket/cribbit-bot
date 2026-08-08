@@ -12,6 +12,8 @@ function railwayApiOrigin(env) {
   return origin(env.RAILWAY_PUBLIC_DOMAIN);
 }
 
+const DEFAULT_CACHE_BUSTER = `${Date.now().toString(36)}-${process.pid}`;
+
 function appCacheBust(env) {
   return (
     env.MINI_APP_VERSION ||
@@ -19,7 +21,7 @@ function appCacheBust(env) {
     env.VERCEL_GIT_COMMIT_SHA ||
     env.VERCEL_DEPLOYMENT_ID ||
     env.RAILWAY_DEPLOYMENT_ID ||
-    null
+    DEFAULT_CACHE_BUSTER
   );
 }
 
