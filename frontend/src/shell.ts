@@ -2187,8 +2187,11 @@ const shellHtml = String.raw`<!doctype html>
 </html>
 `;
 
-document.open();
-document.write(shellHtml);
-document.close();
+const parsedShell = new DOMParser().parseFromString(shellHtml, "text/html");
+document.documentElement.lang = parsedShell.documentElement.lang || "en";
+document.documentElement.dataset.theme =
+  parsedShell.documentElement.dataset.theme || "light";
+document.title = parsedShell.title || document.title;
+document.body.innerHTML = parsedShell.body?.innerHTML || "";
 
 export {};
